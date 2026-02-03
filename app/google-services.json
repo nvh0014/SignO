@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1059790141578",
+    "project_id": "signo-2cab8",
+    "storage_bucket": "signo-2cab8.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1059790141578:android:397aa320c0f4152e515573",
+        "android_client_info": {
+          "package_name": "com.android.signo"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD9CIRPjvFmTbV4cYKI6Pd7lXpmkpGVSro"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

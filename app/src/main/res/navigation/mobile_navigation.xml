@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/mobile_navigation"
+    app:startDestination="@+id/navigation_inicio">
+
+    <fragment
+        android:id="@+id/navigation_inicio"
+        android:name="com.android.signo.ui.inicio.InicioFragment"
+        android:label="Inicio"
+        tools:layout="@layout/fragment_inicio" />
+
+    <fragment
+        android:id="@+id/navigation_inventario"
+        android:name="com.android.signo.ui.inventario.InventarioFragment"
+        android:label="Inventario"
+        tools:layout="@layout/fragment_inventario" />
+
+    <fragment
+        android:id="@+id/navigation_cuenta"
+        android:name="com.android.signo.ui.cuenta.CuentaFragment"
+        android:label="Cuenta"
+        tools:layout="@layout/fragment_cuenta" >
+        <action
+            android:id="@+id/action_navigation_cuenta_to_crearGrupoFragment"
+            app:destination="@id/crearGrupoFragment" />
+        <action
+            android:id="@+id/action_navigation_cuenta_to_groupAdminFragment"
+            app:destination="@id/groupAdminFragment" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/crearGrupoFragment"
+        android:name="com.android.signo.ui.cuenta.CrearGrupoFragment"
+        android:label="Crear o Editar Grupo"
+        tools:layout="@layout/fragment_crear_grupo" >
+        <argument
+            android:name="groupId"
+            app:argType="string"
+            app:nullable="true"
+            android:defaultValue="@null" />
+    </fragment>
+        
+    <fragment
+        android:id="@+id/groupAdminFragment"
+        android:name="com.android.signo.ui.cuenta.GroupAdminFragment"
+        android:label="Administrar Grupo"
+        tools:layout="@layout/fragment_group_admin" >
+        <argument
+            android:name="groupId"
+            app:argType="string" />
+        <action
+            android:id="@+id/action_groupAdminFragment_to_crearGrupoFragment"
+            app:destination="@id/crearGrupoFragment" />
+        <action
+            android:id="@+id/action_groupAdminFragment_to_manageUsersFragment"
+            app:destination="@id/manageUsersFragment" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/manageUsersFragment"
+        android:name="com.android.signo.ui.cuenta.ManageUsersFragment"
+        android:label="Gestionar Miembros"
+        tools:layout="@layout/fragment_manage_users">
+        <argument
+            android:name="groupId"
+            app:argType="string" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/navigation_exportar"
+        android:name="com.android.signo.ui.exportar.ExportarFragment"
+        android:label="Exportar"
+        tools:layout="@layout/fragment_exportar" />
+
+    <activity
+        android:id="@+id/navigation_crear"
+        android:name="com.android.signo.ui.crear.CrearActivity"
+        android:label="Crear reporte"
+        tools:layout="@layout/activity_crear" />
+
+</navigation>
