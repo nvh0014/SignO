@@ -28,6 +28,10 @@
         <activity
             android:name=".ui.crear.CrearActivity"
             android:label="Nuevo Catastro" />
+        <!-- Declaración de la nueva MantenimientoActivity -->
+        <activity
+            android:name=".ui.mantenimiento.MantenimientoActivity"
+            android:label="Nuevo Mantenimiento" />
         <meta-data
             android:name="preloaded_fonts"
             android:resource="@array/preloaded_fonts" />

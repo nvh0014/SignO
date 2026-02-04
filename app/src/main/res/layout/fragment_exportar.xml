@@ -39,9 +39,33 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Exportar Reportes"
+            android:text="Exportar Datos a Excel"
             android:textAppearance="@style/TextAppearance.MaterialComponents.Headline6"
             android:layout_marginBottom="16dp"/>
+
+        <!-- Selector de tipo de datos -->
+        <com.google.android.material.chip.ChipGroup
+            android:id="@+id/chip_group_export_type"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            app:singleSelection="true">
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chip_catastros"
+                style="@style/Widget.Material3.Chip.Filter"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Catastros"
+                android:checked="true" />
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chip_mantenimientos"
+                style="@style/Widget.Material3.Chip.Filter"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Mantenimientos" />
+        </com.google.android.material.chip.ChipGroup>
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -89,9 +113,9 @@
             android:id="@+id/btn_filter"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Filtrar Reportes"
+            android:text="Filtrar por Fecha"
             android:layout_marginBottom="16dp"/>
-            
+
         <Button
             android:id="@+id/btn_export"
             android:layout_width="match_parent"
@@ -100,7 +124,7 @@
             android:layout_marginBottom="16dp"/>
 
         <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/rv_reports"
+            android:id="@+id/rv_items_to_export" 
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
 

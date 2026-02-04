@@ -5,21 +5,28 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
-import com.android.signo.adapter.ReportsAdapter
+import androidx.recyclerview.widget.LinearLayoutManager
+import com.android.signo.adapter.InventarioAdapter
 import com.android.signo.databinding.FragmentInicioBinding
-import com.android.signo.model.Report
+import com.android.signo.ui.crear.Catastro
+import com.android.signo.ui.mantenimiento.Mantenimiento
+import com.google.android.gms.tasks.Tasks
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import java.util.Date
 
 class InicioFragment : Fragment() {
 
     private var _binding: FragmentInicioBinding? = null
     private val binding get() = _binding!!
 
+    // Firebase
     private lateinit var auth: FirebaseAuth
     private lateinit var db: FirebaseFirestore
-    private lateinit var reportsAdapter: ReportsAdapter
+
+    // Usamos el nuevo adaptador genérico
+    private lateinit var inventarioAdapter: InventarioAdapter
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -33,83 +40,100 @@ class InicioFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-
         setupRecyclerView()
-        checkUserAndLoadReports()
+        checkUserAndLoadRecentActivity()
     }
 
     private fun setupRecyclerView() {
-        reportsAdapter = ReportsAdapter(emptyList(), false) { _, _ -> }
-        binding.recyclerViewReports.adapter = reportsAdapter
+        // Inicializamos el InventarioAdapter. No necesita acciones de clic aquí (showActions = false)
+        inventarioAdapter = InventarioAdapter(emptyList(), false) { _, _ -> }
+        binding.recyclerViewReports.adapter = inventarioAdapter
+        binding.recyclerViewReports.layoutManager = LinearLayoutManager(context)
     }
 
-    private fun checkUserAndLoadReports() {
+    private fun checkUserAndLoadRecentActivity() {
         val user = auth.currentUser
         if (user == null) {
-            if (_binding == null) return
             showStatusMessage("No has iniciado sesión.")
             return
         }
 
         binding.progressBar.visibility = View.VISIBLE
-        binding.tvStatusMessage.visibility = View.GONE
-        binding.recyclerViewReports.visibility = View.GONE
 
         db.collection("users").document(user.uid).get()
             .addOnSuccessListener { userDoc ->
-                if (_binding == null) return@addOnSuccessListener
-                if (userDoc != null && userDoc.exists()) {
-                    val groupId = userDoc.getString("id_grupo")
-                    if (groupId.isNullOrEmpty()) {
-                        showStatusMessage("No perteneces a ningún grupo. \nVe a la pestaña 'Cuenta' para unirte a uno.")
-                    } else {
-                        fetchReportsForGroup(groupId)
-                    }
+                val groupId = userDoc.getString("id_grupo")
+                if (groupId.isNullOrEmpty()) {
+                    showStatusMessage("No perteneces a ningún grupo. \nVe a la pestaña 'Cuenta' para unirte a uno.")
                 } else {
-                    showStatusMessage("No se encontraron datos de usuario.")
+                    fetchRecentActivity(groupId)
                 }
             }
-            .addOnFailureListener { e ->
-                if (_binding == null) return@addOnFailureListener
-                showStatusMessage("Error al obtener datos del usuario: ${e.message}")
-            }
+            .addOnFailureListener { e -> showStatusMessage("Error al obtener datos del usuario: ${e.message}") }
     }
 
-    private fun fetchReportsForGroup(groupId: String) {
-        db.collection("reports")
+    /**
+     * Obtiene los últimos items de Catastros y Mantenimientos, los combina,
+     * los ordena y muestra los 3 más recientes en total.
+     */
+    private fun fetchRecentActivity(groupId: String) {
+        val recentCatastrosQuery = db.collection("catastros")
             .whereEqualTo("groupId", groupId)
             .orderBy("timestamp", Query.Direction.DESCENDING)
             .limit(3)
             .get()
-            .addOnSuccessListener { documents ->
-                if (_binding == null) return@addOnSuccessListener
-                binding.progressBar.visibility = View.GONE
-                if (documents.isEmpty) {
-                    showStatusMessage("No hay reportes recientes en tu grupo.")
-                } else {
-                    val reports = documents.toObjects(Report::class.java)
-                    reportsAdapter.updateData(reports)
-                    binding.recyclerViewReports.visibility = View.VISIBLE
+
+        val recentMantenimientosQuery = db.collection("mantenimientos")
+            .whereEqualTo("groupId", groupId)
+            .orderBy("timestamp", Query.Direction.DESCENDING)
+            .limit(3)
+            .get()
+
+        // Combinamos ambas tareas
+        Tasks.whenAllSuccess<Any>(recentCatastrosQuery, recentMantenimientosQuery).addOnSuccessListener { results ->
+            binding.progressBar.visibility = View.GONE
+
+            val catastros = (results[0] as com.google.firebase.firestore.QuerySnapshot).toObjects(Catastro::class.java)
+            val mantenimientos = (results[1] as com.google.firebase.firestore.QuerySnapshot).toObjects(Mantenimiento::class.java)
+
+            val combinedList = (catastros + mantenimientos).toMutableList()
+
+            // Ordenamos la lista combinada por fecha de forma descendente (los más nuevos primero)
+            combinedList.sortByDescending { item ->
+                when(item) {
+                    is Catastro -> item.timestamp
+                    is Mantenimiento -> item.timestamp
+                    else -> null
                 }
             }
-            .addOnFailureListener { e ->
-                if (_binding == null) return@addOnFailureListener
-                showStatusMessage("Error al cargar reportes: ${e.message}")
+
+            // Tomamos los 3 más recientes y los pasamos al adaptador
+            val recentItems = combinedList.take(3)
+
+            if (recentItems.isEmpty()) {
+                showStatusMessage("No hay actividad reciente en tu grupo.")
+            } else {
+                inventarioAdapter.updateData(recentItems)
+                binding.recyclerViewReports.visibility = View.VISIBLE
+                binding.tvStatusMessage.visibility = View.GONE
             }
+        }.addOnFailureListener { e ->
+            showStatusMessage("Error al cargar la actividad reciente: ${e.message}")
+        }
     }
 
     private fun showStatusMessage(message: String) {
-        binding.progressBar.visibility = View.GONE
-        binding.recyclerViewReports.visibility = View.GONE
-        binding.tvStatusMessage.text = message
-        binding.tvStatusMessage.visibility = View.VISIBLE
+        _binding?.apply {
+            progressBar.visibility = View.GONE
+            recyclerViewReports.visibility = View.GONE
+            tvStatusMessage.text = message
+            tvStatusMessage.visibility = View.VISIBLE
+        }
     }
 
     override fun onResume() {
         super.onResume()
-        if (_binding != null) {
-             checkUserAndLoadReports()
-        }
+        checkUserAndLoadRecentActivity()
     }
 
     override fun onDestroyView() {

@@ -29,7 +29,7 @@
             android:orientation="vertical"
             android:padding="16dp">
 
-            <!-- TÍTULO -->
+            <!-- TÍTULO: Actualizado para Catastros -->
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
@@ -48,22 +48,21 @@
                 android:text="Identificación de la Señal"
                 android:layout_marginBottom="8dp"/>
 
+            <!-- CAMPO DE TEXTO: Convertido de AutoComplete a TextInputEditText -->
             <com.google.android.material.textfield.TextInputLayout
                 android:id="@+id/text_input_layout_nombre_senal"
-                style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="12dp"
                 android:hint="*Nombre de la señal (Ej: R-29, PARE)">
 
-                <AutoCompleteTextView
-                    android:id="@+id/auto_complete_nombre_senal"
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/edit_text_nombre_senal"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:fontFamily="@font/inter_medium"
                     android:inputType="textCapCharacters"
-                    android:textSize="14sp"
-                    tools:ignore="LabelFor" />
+                    android:textSize="14sp" />
             </com.google.android.material.textfield.TextInputLayout>
 
             <com.google.android.material.textfield.TextInputLayout
@@ -92,16 +91,16 @@
                 android:text="Ubicación"
                 android:layout_marginBottom="8dp"/>
 
+            <!-- CAMPO DE TEXTO: Convertido de AutoComplete a TextInputEditText -->
             <com.google.android.material.textfield.TextInputLayout
                 android:id="@+id/text_input_layout_calle_principal"
-                style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginBottom="12dp"
                 android:hint="*Calle Principal">
 
-                <AutoCompleteTextView
-                    android:id="@+id/auto_complete_calle_principal"
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/edit_text_calle_principal"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:fontFamily="@font/inter_medium"
@@ -227,13 +226,13 @@
                     android:layout_weight="1"/>
             </RadioGroup>
 
-            <!-- SECCIÓN DE ESTADO Y CARACTERÍSTICAS -->
+            <!-- SECCIÓN DE CARACTERÍSTICAS (SIMPLIFICADA) -->
             <TextView
                 style="@style/TextAppearance.Material3.TitleMedium"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:fontFamily="@font/inter_semibold"
-                android:text="Características y Estado"
+                android:text="Características"
                 android:layout_marginBottom="8dp"/>
 
             <com.google.android.material.textfield.TextInputLayout
@@ -252,104 +251,12 @@
                     android:textSize="14sp" />
             </com.google.android.material.textfield.TextInputLayout>
 
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="*Estado de la Señal"
-                android:fontFamily="@font/inter_medium"
-                android:textColor="?attr/colorOnSurfaceVariant"
-                android:layout_marginStart="4dp"
-                android:layout_marginBottom="4dp"/>
-
-            <RadioGroup
-                android:id="@+id/radiogroup_estado"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:layout_marginBottom="12dp">
-
-                <RadioButton
-                    android:id="@+id/radio_bueno"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Bueno"
-                    android:layout_weight="1"/>
-                <RadioButton
-                    android:id="@+id/radio_regular"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Regular"
-                    android:layout_weight="1"/>
-                <RadioButton
-                    android:id="@+id/radio_malo"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Malo"
-                    android:layout_weight="1"/>
-            </RadioGroup>
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Mantención"
-                android:fontFamily="@font/inter_medium"
-                android:textColor="?attr/colorOnSurfaceVariant"
-                android:layout_marginStart="4dp"
-                android:layout_marginBottom="4dp"/>
-
-            <LinearLayout
-                android:id="@+id/checkbox_group_mantencion"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:layout_marginBottom="24dp">
-
-                <CheckBox
-                    android:id="@+id/checkbox_podado"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Podado" />
-
-                <CheckBox
-                    android:id="@+id/checkbox_pintado"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Pintado" />
-
-                <CheckBox
-                    android:id="@+id/checkbox_limpieza"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="Limpieza" />
-
-            </LinearLayout>
-
-            <com.google.android.material.textfield.TextInputLayout
-                android:id="@+id/text_input_layout_observacion"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="24dp"
-                android:hint="Observación general">
-
-                <com.google.android.material.textfield.TextInputEditText
-                    android:id="@+id/edit_text_observacion"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:fontFamily="@font/inter_medium"
-                    android:inputType="textMultiLine"
-                    android:gravity="top"
-                    android:lines="3"
-                    android:textSize="14sp" />
-            </com.google.android.material.textfield.TextInputLayout>
-
+            <!-- BOTÓN: Actualizado para Catastros -->
             <Button
                 android:id="@+id/button_guardar"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Guardar Reporte"
+                android:text="Guardar Catastro"
                 style="@style/Widget.Material3.Button"
                 android:layout_marginTop="16dp"/>
         </LinearLayout>
