@@ -68,55 +68,16 @@
         <!-- FIN: Selector de tipo de inventario -->
 
         <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/recycler_view_inventario" 
+            android:id="@+id/recycler_view_inventario"
             android:layout_width="0dp"
             android:layout_height="0dp"
             android:layout_marginTop="8dp"
             app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
-            app:layout_constraintBottom_toTopOf="@+id/pagination_controls"
+            app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/chip_group_inventory_type"
-            tools:listitem="@layout/item_report" />
-
-        <LinearLayout
-            android:id="@+id/pagination_controls"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
-            android:padding="8dp"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintHorizontal_bias="0.0"
-            app:layout_constraintStart_toStartOf="parent">
-
-            <ImageButton
-                android:id="@+id/ib_prev_page"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:contentDescription="Página anterior"
-                android:src="@drawable/ic_arrow_back" />
-
-            <TextView
-                android:id="@+id/tv_page_info"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:fontFamily="@font/inter_medium"
-                android:gravity="center"
-                android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
-                tools:text="Página 1 de 5" />
-
-            <ImageButton
-                android:id="@+id/ib_next_page"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:contentDescription="Página siguiente"
-                android:src="@drawable/ic_arrow_forward" />
-
-        </LinearLayout>
+            tools:listitem="@layout/item_inventario" />
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 

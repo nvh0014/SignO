@@ -1,19 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- App Theme Palette -->
+    <color name="purple_200">#FFBB86FC</color>
+    <color name="purple_500">#FF6200EE</color>
+    <color name="purple_700">#FF3700B3</color>
+    <color name="teal_200">#FF03DAC5</color>
+    <color name="teal_700">#FF018786</color>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+
+    <!-- Colores personalizados para el inventario -->
+    <color name="color_catastro_background">#FFFFF0</color> <!-- Amarillo muy suave -->
+    <color name="color_mantenimiento_background">#E6E6FA</color> <!-- Morado muy suave -->
+
+    <!-- Colores amarillos para el tema -->
     <color name="yellow_primary">#FFC107</color>
     <color name="yellow_dark">#FFA000</color>
-    <color name="black">#000000</color>
-    <color name="white">#FFFFFF</color>
-    <color name="dark_gray">#1A1818</color>
 
-    <!-- Semantic & Utility Colors -->
-    <color name="green">#4CAF50</color>
-    <color name="red">#F44336</color>
+    <!-- Colores faltantes -->
+    <color name="orange">#FFA500</color>
     <color name="blue_500">#2196F3</color>
-
-    <!-- Legacy Colors (Mapped to new theme) -->
-    <color name="orange">@color/yellow_dark</color> <!-- Mapped to new yellow -->
-    <color name="textColorPrimary">@color/black</color>
-    <color name="textColorLink">#0000EE</color>
 </resources>

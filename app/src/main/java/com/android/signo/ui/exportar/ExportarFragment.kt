@@ -13,6 +13,7 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.android.signo.R
 import com.android.signo.adapter.InventarioAdapter
@@ -20,17 +21,21 @@ import com.android.signo.databinding.FragmentExportarBinding
 import com.android.signo.ui.crear.Catastro
 import com.android.signo.ui.mantenimiento.Mantenimiento
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.AggregateSource
+import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
-import org.apache.poi.ss.usermodel.Workbook
-import org.apache.poi.xssf.usermodel.XSSFWorkbook
+import com.google.firebase.firestore.QuerySnapshot
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
-// Enum para definir el tipo de datos a exportar
 enum class ExportType { CATASTROS, MANTENIMIENTOS }
 
 class ExportarFragment : Fragment() {
@@ -38,21 +43,27 @@ class ExportarFragment : Fragment() {
     private var _binding: FragmentExportarBinding? = null
     private val binding get() = _binding!!
 
-    // Firebase y estado
     private lateinit var auth: FirebaseAuth
     private lateinit var db: FirebaseFirestore
-    private var currentGroupId: String? = null
-    private var currentExportType = ExportType.CATASTROS // Por defecto, exportamos Catastros
 
-    // Datos y UI
+    private var currentGroupId: String? = null
+    private var currentExportType = ExportType.CATASTROS
+
     private lateinit var inventarioAdapter: InventarioAdapter
-    private var itemsToExport = mutableListOf<Any>()
+    private var previewItems = mutableListOf<Pair<String, Any>>()
     private var startDate: Date? = null
     private var endDate: Date? = null
 
+    private val PREVIEW_LIMIT = 50L
+    private val PREVIEW_THRESHOLD = 70L
+    private val EXPORT_BATCH_SIZE = 500L
+
     private val requestPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
-        if (isGranted) exportDataToExcel()
-        else Toast.makeText(requireContext(), "Permiso de escritura denegado.", Toast.LENGTH_SHORT).show()
+        if (isGranted) {
+            startCsvExport()
+        } else {
+            Toast.makeText(requireContext(), "Permiso de escritura denegado.", Toast.LENGTH_SHORT).show()
+        }
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
@@ -70,8 +81,7 @@ class ExportarFragment : Fragment() {
     }
 
     private fun setupRecyclerView() {
-        // Usamos el adaptador genérico. Las acciones de item no son necesarias aquí (showActions = false).
-        inventarioAdapter = InventarioAdapter(emptyList(), false) { _, _ -> }
+        inventarioAdapter = InventarioAdapter(mutableListOf(), false) { _, _, _ -> }
         binding.rvItemsToExport.adapter = inventarioAdapter
         binding.rvItemsToExport.layoutManager = LinearLayoutManager(context)
     }
@@ -83,202 +93,324 @@ class ExportarFragment : Fragment() {
                 R.id.chip_mantenimientos -> ExportType.MANTENIMIENTOS
                 else -> ExportType.CATASTROS
             }
-            itemsToExport.clear()
-            inventarioAdapter.updateData(itemsToExport)
+            clearPreview()
         }
 
-        binding.etStartDate.setOnClickListener { showDatePickerDialog(true) }
-        binding.etEndDate.setOnClickListener { showDatePickerDialog(false) }
-        binding.btnFilter.setOnClickListener { loadData() }
+        binding.etStartDate.setOnClickListener { showDatePickerDialog(isStart = true) }
+        binding.etEndDate.setOnClickListener { showDatePickerDialog(isStart = false) }
+
+        binding.btnFilter.setOnClickListener { loadPreviewData() }
         binding.btnExport.setOnClickListener { checkStoragePermissionAndExport() }
     }
 
-    /**
-     * Carga los datos desde Firestore (Catastros o Mantenimientos) según la selección
-     * y el rango de fechas para mostrarlos antes de exportar.
-     */
-    private fun loadData() {
-        if (startDate == null || endDate == null) {
-            Toast.makeText(requireContext(), "Selecciona ambas fechas", Toast.LENGTH_SHORT).show()
+    private fun showDatePickerDialog(isStart: Boolean) {
+        val calendar = Calendar.getInstance()
+        if (isStart && startDate != null) calendar.time = startDate!!
+        else if (!isStart && endDate != null) calendar.time = endDate!!
+
+        val dateSetListener = DatePickerDialog.OnDateSetListener { _, year, month, dayOfMonth ->
+            calendar.set(year, month, dayOfMonth)
+            val sdf = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
+            if (isStart) {
+                calendar.set(Calendar.HOUR_OF_DAY, 0); calendar.set(Calendar.MINUTE, 0); calendar.set(Calendar.SECOND, 0)
+                startDate = calendar.time
+                binding.etStartDate.setText(sdf.format(startDate!!))
+            } else {
+                calendar.set(Calendar.HOUR_OF_DAY, 23); calendar.set(Calendar.MINUTE, 59); calendar.set(Calendar.SECOND, 59)
+                endDate = calendar.time
+                binding.etEndDate.setText(sdf.format(endDate!!))
+            }
+            binding.btnExport.isEnabled = false
+        }
+
+        DatePickerDialog(requireContext(), dateSetListener, calendar.get(Calendar.YEAR), calendar.get(Calendar.MONTH), calendar.get(Calendar.DAY_OF_MONTH)).show()
+    }
+
+    private fun clearPreview() {
+        previewItems.clear()
+        inventarioAdapter.setData(emptyList())
+        binding.btnExport.isEnabled = false
+    }
+
+    private fun loadPreviewData() {
+        if (!validateDates()) return
+        clearPreview()
+        setLoading(true, "Contando registros...")
+
+        val query = buildQuery()
+        if (query == null) {
+            setLoading(false)
+            binding.btnExport.isEnabled = false
             return
         }
 
-        binding.progressBar.visibility = View.VISIBLE
+        query.count().get(AggregateSource.SERVER).addOnSuccessListener { aggregateQuerySnapshot ->
+            val count = aggregateQuerySnapshot.count
+            if (count == 0L) {
+                setLoading(false)
+                Toast.makeText(requireContext(), "No se encontraron datos para exportar.", Toast.LENGTH_SHORT).show()
+                binding.btnExport.isEnabled = false
+                return@addOnSuccessListener
+            }
 
-        val collectionPath = if (currentExportType == ExportType.CATASTROS) "catastros" else "mantenimientos"
-        val objectClass = if (currentExportType == ExportType.CATASTROS) Catastro::class.java else Mantenimiento::class.java
+            if (count > PREVIEW_THRESHOLD) {
+                setLoading(false)
+                Toast.makeText(requireContext(), "Se encontraron $count registros. Vista previa omitida para mejorar el rendimiento.", Toast.LENGTH_LONG).show()
+                binding.btnExport.isEnabled = true
+                return@addOnSuccessListener
+            }
 
-        db.collection(collectionPath)
-            .whereEqualTo("groupId", currentGroupId)
-            .whereGreaterThanOrEqualTo("timestamp", startDate!!)
-            .whereLessThanOrEqualTo("timestamp", endDate!!)
-            .orderBy("timestamp", Query.Direction.DESCENDING)
-            .get()
-            .addOnSuccessListener { documents ->
-                itemsToExport.clear()
-                itemsToExport.addAll(documents.map { it.toObject(objectClass) })
-                inventarioAdapter.updateData(itemsToExport)
-                binding.progressBar.visibility = View.GONE
-                if (itemsToExport.isEmpty()) {
-                    Toast.makeText(context, "No se encontraron datos en ese rango de fechas.", Toast.LENGTH_SHORT).show()
+            setLoading(true, "Cargando vista previa...")
+            query.limit(PREVIEW_LIMIT).get().addOnSuccessListener { documents ->
+                setLoading(false)
+                if (context == null) {
+                    binding.btnExport.isEnabled = false
+                    return@addOnSuccessListener
                 }
+                try {
+                    val objectClass = if (currentExportType == ExportType.CATASTROS) Catastro::class.java else Mantenimiento::class.java
+                    previewItems = documents.map { doc -> Pair(doc.id, doc.toObject(objectClass)) }.toMutableList()
+                    inventarioAdapter.setData(previewItems)
+                    binding.rvItemsToExport.scheduleLayoutAnimation()
+                    binding.btnExport.isEnabled = true
+                } catch (e: Exception) {
+                    if (context != null) handleFirestoreError(e)
+                    binding.btnExport.isEnabled = false
+                }
+
+            }.addOnFailureListener { exception ->
+                setLoading(false)
+                if (context != null) handleFirestoreError(exception)
+                binding.btnExport.isEnabled = false
             }
-            .addOnFailureListener { exception ->
-                binding.progressBar.visibility = View.GONE
-                Toast.makeText(requireContext(), "Error al cargar: ${exception.message}", Toast.LENGTH_SHORT).show()
-            }
-    }
 
-    /**
-     * Función principal para exportar a Excel. Crea un libro de trabajo y llama a la función
-     * correspondiente para rellenarlo según el tipo de datos.
-     */
-    private fun exportDataToExcel() {
-        if (itemsToExport.isEmpty()) {
-            Toast.makeText(requireContext(), "No hay datos filtrados para exportar.", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        val workbook: Workbook = XSSFWorkbook()
-        val sheetName = if (currentExportType == ExportType.CATASTROS) "Catastros" else "Mantenimientos"
-        val sheet = workbook.createSheet(sheetName)
-
-        // Llama a la función específica para crear el contenido del Excel
-        if (currentExportType == ExportType.CATASTROS) {
-            createCatastrosExcel(sheet, itemsToExport.filterIsInstance<Catastro>())
-        } else {
-            createMantenimientosExcel(sheet, itemsToExport.filterIsInstance<Mantenimiento>())
-        }
-
-        saveWorkbook(workbook)
-    }
-
-    /**
-     * Rellena una hoja de Excel con los datos de Catastros.
-     */
-    private fun createCatastrosExcel(sheet: org.apache.poi.ss.usermodel.Sheet, data: List<Catastro>) {
-        val headerRow = sheet.createRow(0)
-        val headers = listOf("Nombre Señal", "Leyenda", "Calle Principal", "Intersección", "Numeración", "Cant. Postes", "Tipo Poste", "Medida", "Existencia", "Registrado por", "Fecha")
-        headers.forEachIndexed { index, text -> headerRow.createCell(index).setCellValue(text) }
-
-        val sdf = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
-        data.forEachIndexed { index, catastro ->
-            val row = sheet.createRow(index + 1)
-            row.createCell(0).setCellValue(catastro.nombreSenal)
-            row.createCell(1).setCellValue(catastro.leyenda)
-            row.createCell(2).setCellValue(catastro.callePrincipal)
-            row.createCell(3).setCellValue(catastro.interseccion)
-            row.createCell(4).setCellValue(catastro.numeracion)
-            row.createCell(5).setCellValue(catastro.cantidadPostes)
-            row.createCell(6).setCellValue(catastro.tipoPoste)
-            row.createCell(7).setCellValue(catastro.medida)
-            row.createCell(8).setCellValue(catastro.existencia)
-            row.createCell(9).setCellValue(catastro.userName)
-            row.createCell(10).setCellValue(catastro.timestamp?.let { sdf.format(it) } ?: "N/A")
+        }.addOnFailureListener { exception ->
+            setLoading(false)
+            if (context != null) handleFirestoreError(exception)
+            binding.btnExport.isEnabled = false
         }
     }
-
-    /**
-     * Rellena una hoja de Excel con los datos de Mantenimientos.
-     */
-    private fun createMantenimientosExcel(sheet: org.apache.poi.ss.usermodel.Sheet, data: List<Mantenimiento>) {
-        val headerRow = sheet.createRow(0)
-        val headers = listOf("ID Catastro", "Estado", "Trabajos Realizados", "Observación", "Realizado por", "Fecha")
-        headers.forEachIndexed { index, text -> headerRow.createCell(index).setCellValue(text) }
-
-        val sdf = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
-        data.forEachIndexed { index, mantenimiento ->
-            val row = sheet.createRow(index + 1)
-            row.createCell(0).setCellValue(mantenimiento.catastroId)
-            row.createCell(1).setCellValue(mantenimiento.estado)
-            row.createCell(2).setCellValue(mantenimiento.trabajosRealizados.joinToString(", "))
-            row.createCell(3).setCellValue(mantenimiento.observacion)
-            row.createCell(4).setCellValue(mantenimiento.userName)
-            row.createCell(5).setCellValue(mantenimiento.timestamp?.let { sdf.format(it) } ?: "N/A")
-        }
-    }
-
-    // --- Boilerplate para permisos, guardado de archivos y selección de fechas (sin cambios mayores) ---
 
     private fun checkStoragePermissionAndExport() {
+        if (!validateDates()) return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            exportDataToExcel()
+            startCsvExport()
         } else {
-            if (ContextCompat.checkSelfPermission(requireContext(), android.Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
-                exportDataToExcel()
-            } else {
-                requestPermissionLauncher.launch(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
+            when (ContextCompat.checkSelfPermission(requireContext(), android.Manifest.permission.WRITE_EXTERNAL_STORAGE)) {
+                PackageManager.PERMISSION_GRANTED -> startCsvExport()
+                else -> requestPermissionLauncher.launch(android.Manifest.permission.WRITE_EXTERNAL_STORAGE)
             }
         }
     }
 
-    private fun saveWorkbook(workbook: Workbook) {
-        val sheetName = if (currentExportType == ExportType.CATASTROS) "Catastros" else "Mantenimientos"
-        val fileName = "${sheetName}_SignO_${System.currentTimeMillis()}.xlsx"
-        try {
+    private fun startCsvExport() {
+        setLoading(true, "Exportando... Por favor, espere.")
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            val sheetName = if (currentExportType == ExportType.CATASTROS) "Catastros" else "Mantenimientos"
+            val fileName = "${sheetName}_SignO_${System.currentTimeMillis()}.csv"
+
             val contentValues = ContentValues().apply {
                 put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
-                put(MediaStore.MediaColumns.MIME_TYPE, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+                put(MediaStore.MediaColumns.MIME_TYPE, "text/csv")
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     put(MediaStore.MediaColumns.RELATIVE_PATH, "Documents/SignO")
                     put(MediaStore.MediaColumns.IS_PENDING, 1)
                 }
             }
+
             val resolver = requireContext().contentResolver
             val uri = resolver.insert(MediaStore.Files.getContentUri("external"), contentValues)
-            uri?.let {
-                resolver.openOutputStream(it)?.use { out -> workbook.write(out) }
+
+            if (uri == null) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(requireContext(), "No se pudo crear el archivo de exportación.", Toast.LENGTH_LONG).show()
+                    setLoading(false)
+                }
+                return@launch
+            }
+
+            var documentsProcessed = 0
+            try {
+                resolver.openOutputStream(uri)?.use { outputStream ->
+                    outputStream.bufferedWriter(Charsets.UTF_8).use { writer ->
+                        val headers = if (currentExportType == ExportType.CATASTROS) {
+                            listOf("Nombre Señal", "Leyenda", "Calle Principal", "Intersección", "Numeración", "Cant. Postes", "Tipo Poste", "Medida", "Existencia", "Registrado por", "Fecha")
+                        } else {
+                            listOf("ID Catastro", "Estado", "Trabajos Realizados", "Observación", "Realizado por", "Fecha")
+                        }
+                        writer.write(headers.joinToString(","))
+                        writer.newLine()
+
+                        var lastLoadedDoc: DocumentSnapshot? = null
+                        while (true) {
+                            val query = buildQuery()?.limit(EXPORT_BATCH_SIZE)?.let {
+                                if (lastLoadedDoc != null) it.startAfter(lastLoadedDoc!!) else it
+                            } ?: break
+
+                            val documents: QuerySnapshot = query.get().await()
+                            if (documents.isEmpty) break
+
+                            val objectClass = if (currentExportType == ExportType.CATASTROS) Catastro::class.java else Mantenimiento::class.java
+                            for (doc in documents) {
+                                val item = doc.toObject(objectClass)
+                                val row = if (currentExportType == ExportType.CATASTROS) {
+                                    createCatastroCsvRow(item as Catastro)
+                                } else {
+                                    createMantenimientoCsvRow(item as Mantenimiento)
+                                }
+                                writer.write(row)
+                                writer.newLine()
+                                documentsProcessed++
+                            }
+
+                            withContext(Dispatchers.Main) {
+                                binding.tvStatusMessage.text = "Exportando... $documentsProcessed registros"
+                            }
+
+                            lastLoadedDoc = documents.documents.lastOrNull()
+                            if (documents.size() < EXPORT_BATCH_SIZE) break
+                        }
+                    }
+                }
+
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                     contentValues.clear()
                     contentValues.put(MediaStore.MediaColumns.IS_PENDING, 0)
-                    resolver.update(it, contentValues, null, null)
+                    resolver.update(uri, contentValues, null, null)
                 }
-                Toast.makeText(requireContext(), "Archivo guardado en Documentos/SignO", Toast.LENGTH_LONG).show()
-            } ?: throw IOException("No se pudo crear el archivo en MediaStore.")
-        } catch (e: IOException) {
-            e.printStackTrace()
-            Toast.makeText(requireContext(), "Error al guardar el archivo: ${e.message}", Toast.LENGTH_LONG).show()
+
+                withContext(Dispatchers.Main) {
+                    if (documentsProcessed > 0) {
+                        Toast.makeText(requireContext(), "Archivo CSV guardado en Documentos/SignO", Toast.LENGTH_LONG).show()
+                    } else {
+                        Toast.makeText(requireContext(), "No se encontraron datos para exportar.", Toast.LENGTH_SHORT).show()
+                        resolver.delete(uri, null, null)
+                    }
+                }
+
+            } catch (t: Throwable) {
+                resolver.delete(uri, null, null)
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(requireContext(), "Error en la exportación: ${t.message}", Toast.LENGTH_LONG).show()
+                }
+                t.printStackTrace()
+            } finally {
+                withContext(Dispatchers.Main) {
+                    setLoading(false)
+                }
+            }
         }
     }
-    
-    private fun checkUserRoleAndInitialize() {
-        val user = auth.currentUser
-        if (user == null) { showError("Usuario no autenticado."); return }
-        binding.progressBar.visibility = View.VISIBLE
 
-        db.collection("users").document(user.uid).get().addOnSuccessListener {
-            currentGroupId = it.getString("id_grupo") // Guardamos el id del grupo
-            if (it.getString("rol") == "admin") {
-                binding.progressBar.visibility = View.GONE
-                binding.tvStatusMessage.visibility = View.GONE
-                binding.exportContent.visibility = View.VISIBLE
-            } else {
-                showError("No tienes permisos de administrador para acceder aquí.")
-            }
-        }.addOnFailureListener { showError("Error al verificar permisos.") }
+    private fun buildQuery(): Query? {
+        if (currentGroupId == null || startDate == null || endDate == null) return null
+        val collectionPath = if (currentExportType == ExportType.CATASTROS) "catastros" else "mantenimientos"
+        return db.collection(collectionPath)
+            .whereEqualTo("groupId", currentGroupId)
+            .whereGreaterThanOrEqualTo("timestamp", startDate!!)
+            .whereLessThanOrEqualTo("timestamp", endDate!!)
+            .orderBy("timestamp", Query.Direction.ASCENDING)
     }
 
-    private fun showDatePickerDialog(isStartDate: Boolean) {
-        val cal = Calendar.getInstance()
-        DatePickerDialog(requireContext(), { _, y, m, d ->
-            val selected = Calendar.getInstance().apply{ set(y, m, d) }.time
-            val sdf = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
-            if (isStartDate) {
-                startDate = selected
-                binding.etStartDate.setText(sdf.format(selected))
+    private fun escapeCsvField(data: String?): String {
+        if (data == null) return ""
+        if (data.contains(",") || data.contains("\"") || data.contains("\n")) {
+            return "\"${data.replace("\"", "\"\"")}\""
+        }
+        return data
+    }
+
+    private fun createCatastroCsvRow(catastro: Catastro): String {
+        val sdf = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
+        val data = listOf(
+            catastro.nombreSenal?.toString() ?: "",
+            catastro.leyenda?.toString() ?: "",
+            catastro.callePrincipal?.toString() ?: "",
+            catastro.interseccion?.toString() ?: "",
+            catastro.numeracion?.toString() ?: "",
+            catastro.cantidadPostes?.toString() ?: "",
+            catastro.tipoPoste?.toString() ?: "",
+            catastro.medida?.toString() ?: "",
+            catastro.existencia?.toString() ?: "",
+            catastro.userName?.toString() ?: "",
+            catastro.timestamp?.let { sdf.format(it) } ?: ""
+        )
+        return data.joinToString(",") { escapeCsvField(it) }
+    }
+
+    private fun createMantenimientoCsvRow(mantenimiento: Mantenimiento): String {
+        val sdf = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
+        val data = listOf(
+            mantenimiento.catastroId,
+            mantenimiento.estado,
+            mantenimiento.trabajosRealizados.joinToString("; "),
+            mantenimiento.observacion,
+            mantenimiento.userName,
+            mantenimiento.timestamp?.let { sdf.format(it) } ?: ""
+        )
+        return data.joinToString(",") { escapeCsvField(it) }
+    }
+
+    private fun checkUserRoleAndInitialize() {
+        val user = auth.currentUser
+        if (user == null) {
+            showError("Usuario no autenticado."); return
+        }
+        setLoading(true, "Verificando permisos...")
+        db.collection("users").document(user.uid).get().addOnSuccessListener { documentSnapshot ->
+            if (context == null) return@addOnSuccessListener
+            currentGroupId = documentSnapshot.getString("id_grupo")
+            if (currentGroupId == null) {
+                showError("No perteneces a ningún grupo.")
             } else {
-                endDate = selected
-                binding.etEndDate.setText(sdf.format(selected))
+                setLoading(false)
+                binding.exportContent.visibility = View.VISIBLE
+                binding.tvStatusMessage.visibility = View.GONE
             }
-        }, cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH)).show()
+        }.addOnFailureListener {
+            if (context == null) return@addOnFailureListener
+            showError("Error al verificar tu grupo.")
+        }
+    }
+
+    private fun validateDates(): Boolean {
+        if (startDate == null || endDate == null) {
+            Toast.makeText(requireContext(), "Selecciona ambas fechas", Toast.LENGTH_SHORT).show()
+            return false
+        }
+        if (startDate!!.after(endDate!!)) {
+            Toast.makeText(requireContext(), "La fecha de inicio no puede ser posterior a la fecha de fin.", Toast.LENGTH_SHORT).show()
+            return false
+        }
+        return true
+    }
+
+    private fun handleFirestoreError(exception: Exception) {
+        val message = if (exception.message?.contains("FAILED PRECONDITION") == true) {
+            "Error: La consulta requiere un índice de Firestore que no existe. Revisa el Logcat para encontrar el enlace directo para crearlo."
+        } else {
+            "Error al cargar o deserializar: ${exception.message}"
+        }
+        Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show()
     }
 
     private fun showError(message: String) {
-        _binding?.apply {
-            progressBar.visibility = View.GONE
-            tvStatusMessage.text = message
-            tvStatusMessage.visibility = View.VISIBLE
-            exportContent.visibility = View.GONE
+        binding.progressBar.visibility = View.GONE
+        binding.exportContent.visibility = View.GONE
+        binding.tvStatusMessage.visibility = View.VISIBLE
+        binding.tvStatusMessage.text = message
+    }
+
+    private fun setLoading(isLoading: Boolean, message: String = "") {
+        binding.progressBar.visibility = if (isLoading) View.VISIBLE else View.GONE
+        binding.tvStatusMessage.text = message
+        binding.tvStatusMessage.visibility = if (isLoading && message.isNotEmpty()) View.VISIBLE else View.GONE
+        binding.exportContent.alpha = if (isLoading) 0.5f else 1.0f
+        binding.btnFilter.isEnabled = !isLoading
+
+        if (isLoading) {
+            binding.btnExport.isEnabled = false
         }
     }
 

@@ -6,7 +6,7 @@ import android.view.ViewGroup
 import android.widget.PopupMenu
 import androidx.recyclerview.widget.RecyclerView
 import com.android.signo.R
-import com.android.signo.databinding.ItemReportBinding
+import com.android.signo.databinding.ItemInventarioBinding
 import com.android.signo.model.Report
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -24,7 +24,7 @@ class ReportsAdapter(
 ) : RecyclerView.Adapter<ReportsAdapter.ReportViewHolder>() {
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ReportViewHolder {
-        val binding = ItemReportBinding.inflate(LayoutInflater.from(parent.context), parent, false)
+        val binding = ItemInventarioBinding.inflate(LayoutInflater.from(parent.context), parent, false)
         return ReportViewHolder(binding, onOptionClicked)
     }
 
@@ -40,26 +40,20 @@ class ReportsAdapter(
     }
 
     class ReportViewHolder(
-        private val binding: ItemReportBinding,
+        private val binding: ItemInventarioBinding,
         private val onOptionClicked: (Report, ReportAction) -> Unit
     ) : RecyclerView.ViewHolder(binding.root) {
 
         fun bind(report: Report, showOptionsMenu: Boolean) {
-            binding.tvReportName.text = report.nombreSenal
-            binding.tvReportStreet.text = report.callePrincipal
+            binding.tvItemTitle.text = report.nombreSenal
+            binding.tvItemSubtitle.text = report.callePrincipal
 
             val sdf = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
             val dateString = report.timestamp?.let { sdf.format(it) } ?: "Fecha desconocida"
             val userAndDate = "por ${report.userName} el $dateString"
-            binding.tvReportUserDate.text = userAndDate
+            binding.tvItemTertiary.text = userAndDate
 
-            if (report.mantencion.isNotEmpty()) {
-                binding.tvReportMaintenance.visibility = View.VISIBLE
-                val maintenanceText = "Mantenciones: ${report.mantencion.joinToString()}"
-                binding.tvReportMaintenance.text = maintenanceText
-            } else {
-                binding.tvReportMaintenance.visibility = View.GONE
-            }
+            binding.tvItemDate.visibility = View.GONE // Ocultamos el campo de fecha que no se usa
 
             if (showOptionsMenu) {
                 binding.ivOptionsMenu.visibility = View.VISIBLE

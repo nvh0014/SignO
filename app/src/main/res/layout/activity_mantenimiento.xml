@@ -49,23 +49,38 @@
                 android:text="Buscar Señal en Catastro"
                 android:layout_marginBottom="8dp"/>
 
-            <com.google.android.material.textfield.TextInputLayout
-                android:id="@+id/text_input_layout_buscar_senal"
-                style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="24dp"
-                android:hint="*Busca por nombre o ID de la señal">
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:layout_marginBottom="24dp">
 
-                <AutoCompleteTextView
-                    android:id="@+id/auto_complete_buscar_senal"
-                    android:layout_width="match_parent"
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/text_input_layout_buscar_senal"
+                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
-                    android:fontFamily="@font/inter_medium"
-                    android:inputType="textCapCharacters"
-                    android:textSize="14sp"
-                    tools:ignore="LabelFor" />
-            </com.google.android.material.textfield.TextInputLayout>
+                    android:layout_weight="1"
+                    android:hint="*ID del Catastro"
+                    app:prefixText="CAT_">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/edit_text_buscar_senal"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="@font/inter_medium"
+                        android:inputType="number"
+                        android:textSize="14sp" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <Button
+                    android:id="@+id/button_buscar_senal"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="Cargar" />
+            </LinearLayout>
 
 
             <!-- EL RESTO DE LOS CAMPOS ESTARÁN DESHABILITADOS Y SE AUTOCOMPLETARÁN -->

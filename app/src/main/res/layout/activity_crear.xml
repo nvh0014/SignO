@@ -226,6 +226,45 @@
                     android:layout_weight="1"/>
             </RadioGroup>
 
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="@font/inter_medium"
+                android:layout_marginStart="4dp"
+                android:layout_marginTop="16dp"
+                android:layout_marginBottom="4dp"
+                android:text="*Estado de la señal"
+                android:textColor="?attr/colorOnSurfaceVariant" />
+
+            <RadioGroup
+                android:id="@+id/radiogroup_estado"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="24dp"
+                android:orientation="horizontal">
+
+                <RadioButton
+                    android:id="@+id/radio_buena"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Buena" />
+
+                <RadioButton
+                    android:id="@+id/radio_regular"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Regular" />
+
+                <RadioButton
+                    android:id="@+id/radio_mala"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Mala" />
+            </RadioGroup>
+
             <!-- SECCIÓN DE CARACTERÍSTICAS (SIMPLIFICADA) -->
             <TextView
                 style="@style/TextAppearance.Material3.TitleMedium"

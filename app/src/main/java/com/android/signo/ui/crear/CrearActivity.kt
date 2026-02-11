@@ -14,36 +14,36 @@ import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.DocumentId
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ServerTimestamp
 import java.util.Date
 
 /**
- * Data class para representar la estructura de un Catastro en Firestore.
- * Esto nos permite tener un modelo de datos limpio y separado de los mantenimientos.
+ * Data class a prueba de balas para Catastro. Acepta cualquier tipo de dato
+ * para evitar fallos de deserialización con datos antiguos e inconsistentes.
  */
 data class Catastro(
-    val nombreSenal: String = "",
-    val leyenda: String = "",
-    val callePrincipal: String = "",
-    val interseccion: String = "",
-    val numeracion: String = "",
-    val cantidadPostes: String = "",
-    val tipoPoste: String = "",
-    val medida: String = "",
-    val existencia: String = "",
-    val groupId: String = "",
-    val userUid: String = "",
-    val userName: String = "",
+    @DocumentId val id: String = "",
+    val nombreSenal: Any? = null,
+    val leyenda: Any? = null,
+    val callePrincipal: Any? = null,
+    val interseccion: Any? = null,
+    val numeracion: Any? = null,
+    val cantidadPostes: Any? = null,
+    val tipoPoste: Any? = null,
+    val medida: Any? = null,
+    val existencia: Any? = null,
+    val estado: Any? = null,
+    val groupId: String? = "",
+    val userUid: String? = "",
+    val userName: String? = "",
     @ServerTimestamp val timestamp: Date? = null
 )
 
 class CrearActivity : AppCompatActivity() {
 
     // --- VISTAS ---
-    // Se han actualizado las vistas para reflejar los cambios en el layout.
-    // Se eliminaron las vistas relacionadas con mantenimiento.
     private lateinit var buttonGuardar: Button
     private lateinit var editTextNombreSenal: TextInputEditText
     private lateinit var editTextLeyenda: EditText
@@ -54,6 +54,7 @@ class CrearActivity : AppCompatActivity() {
     private lateinit var autoCompleteTextViewTipoPoste: AutoCompleteTextView
     private lateinit var editTextMedida: EditText
     private lateinit var radioGroupExistencia: RadioGroup
+    private lateinit var radioGroupEstado: RadioGroup
     private lateinit var toolbar: MaterialToolbar
 
     // --- LAYOUTS DE VALIDACIÓN ---
@@ -63,11 +64,16 @@ class CrearActivity : AppCompatActivity() {
     private lateinit var textInputLayoutTipoPoste: TextInputLayout
     private lateinit var textInputLayoutMedida: TextInputLayout
 
-    // --- FIREBASE Y DATOS DE USUARIO ---
+    // --- FIREBASE Y DATOS ---
     private lateinit var auth: FirebaseAuth
     private lateinit var db: FirebaseFirestore
     private var currentGroupId: String? = null
     private var currentUserName: String? = null
+    private var editCatastroId: String? = null // ID del catastro a editar
+
+    companion object {
+        const val EDIT_CATASTRO_ID = "EDIT_CATASTRO_ID"
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -76,7 +82,9 @@ class CrearActivity : AppCompatActivity() {
         auth = FirebaseAuth.getInstance()
         db = FirebaseFirestore.getInstance()
 
-        // Se eliminó la lógica para recibir "EDIT_REPORT_DOC_ID"
+        // Se recibe el ID del catastro a editar (si existe)
+        editCatastroId = intent.getStringExtra(EDIT_CATASTRO_ID)
+
         checkUserAndInitialize()
     }
 
@@ -98,7 +106,7 @@ class CrearActivity : AppCompatActivity() {
                     currentGroupId = document.getString("id_grupo")
                     currentUserName = document.getString("name")
                     if (currentGroupId.isNullOrEmpty()) {
-                        Toast.makeText(this, "Debes unirte a un grupo para crear un catastro.", Toast.LENGTH_LONG).show()
+                        Toast.makeText(this, "Debes unirte a un grupo para crear/editar un catastro.", Toast.LENGTH_LONG).show()
                         finish()
                     } else {
                         initializeUI()
@@ -116,7 +124,7 @@ class CrearActivity : AppCompatActivity() {
 
     /**
      * Inicializa todas las vistas de la UI y establece los listeners.
-     * La lógica de edición y autocompletado ha sido eliminada.
+     * Carga los datos si estamos en modo de edición.
      */
     private fun initializeUI() {
         toolbar = findViewById(R.id.toolbar)
@@ -125,7 +133,7 @@ class CrearActivity : AppCompatActivity() {
         supportActionBar?.setDisplayShowTitleEnabled(false)
         toolbar.setNavigationOnClickListener { onBackPressedDispatcher.onBackPressed() }
 
-        // Actualización de referencias de vistas
+        // Referencias de vistas
         buttonGuardar = findViewById(R.id.button_guardar)
         editTextNombreSenal = findViewById(R.id.edit_text_nombre_senal)
         editTextLeyenda = findViewById(R.id.edit_text_leyenda)
@@ -136,6 +144,7 @@ class CrearActivity : AppCompatActivity() {
         autoCompleteTextViewTipoPoste = findViewById(R.id.auto_complete_tipo_poste)
         editTextMedida = findViewById(R.id.edit_text_medida)
         radioGroupExistencia = findViewById(R.id.radiogroup_existencia)
+        radioGroupEstado = findViewById(R.id.radiogroup_estado)
 
         textInputLayoutNombreSeñal = findViewById(R.id.text_input_layout_nombre_senal)
         textInputLayoutCallePrincipal = findViewById(R.id.text_input_layout_calle_principal)
@@ -143,14 +152,18 @@ class CrearActivity : AppCompatActivity() {
         textInputLayoutTipoPoste = findViewById(R.id.text_input_layout_tipo_poste)
         textInputLayoutMedida = findViewById(R.id.text_input_layout_medida)
 
-        // Configuración del menú desplegable para tipos de poste
         val tiposPoste = resources.getStringArray(R.array.tipos_poste)
         val adapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, tiposPoste)
         autoCompleteTextViewTipoPoste.setAdapter(adapter)
 
-        // Se establece el título y texto del botón para "Nuevo Catastro"
-        toolbar.title = "Nuevo Catastro"
-        buttonGuardar.text = "Guardar Catastro"
+        if (editCatastroId != null) {
+            toolbar.title = "Editar Catastro"
+            buttonGuardar.text = "Actualizar Catastro"
+            loadCatastroForEditing()
+        } else {
+            toolbar.title = "Nuevo Catastro"
+            buttonGuardar.text = "Guardar Catastro"
+        }
 
         buttonGuardar.setOnClickListener {
             if (validarCampos()) {
@@ -160,8 +173,57 @@ class CrearActivity : AppCompatActivity() {
     }
 
     /**
+     * Carga los datos del catastro desde Firestore para rellenar el formulario.
+     */
+    private fun loadCatastroForEditing() {
+        editCatastroId?.let { id ->
+            db.collection("catastros").document(id).get()
+                .addOnSuccessListener { document ->
+                    if (document.exists()) {
+                        val catastro = document.toObject(Catastro::class.java)
+                        catastro?.let { populateUIWithCatastro(it) }
+                    } else {
+                        Toast.makeText(this, "Error: No se encontró el catastro.", Toast.LENGTH_SHORT).show()
+                        finish()
+                    }
+                }
+                .addOnFailureListener {
+                    Toast.makeText(this, "Error al cargar los datos del catastro.", Toast.LENGTH_SHORT).show()
+                }
+        }
+    }
+
+    /**
+     * Rellena los campos de la UI con los datos de un objeto Catastro.
+     */
+    private fun populateUIWithCatastro(catastro: Catastro) {
+        editTextNombreSenal.setText(catastro.nombreSenal?.toString() ?: "")
+        editTextLeyenda.setText(catastro.leyenda?.toString() ?: "")
+        editTextCallePrincipal.setText(catastro.callePrincipal?.toString() ?: "")
+        editTextInterseccion.setText(catastro.interseccion?.toString() ?: "")
+        editTextNumeracion.setText(catastro.numeracion?.toString() ?: "")
+        editTextCantidadPostes.setText(catastro.cantidadPostes?.toString() ?: "")
+        autoCompleteTextViewTipoPoste.setText(catastro.tipoPoste?.toString() ?: "", false)
+        editTextMedida.setText(catastro.medida?.toString() ?: "")
+
+        if (catastro.existencia?.toString() == "Sí") {
+            radioGroupExistencia.check(R.id.radio_si_existe)
+        } else if (catastro.existencia?.toString() == "No") {
+            radioGroupExistencia.check(R.id.radio_no_existe)
+        }
+
+        if (catastro.estado?.toString() == "Buena") {
+            radioGroupEstado.check(R.id.radio_buena)
+        } else if (catastro.estado?.toString() == "Regular") {
+            radioGroupEstado.check(R.id.radio_regular)
+        } else if (catastro.estado?.toString() == "Mala") {
+            radioGroupEstado.check(R.id.radio_mala)
+        }
+    }
+
+
+    /**
      * Valida que los campos obligatorios del catastro no estén vacíos.
-     * Se eliminó la validación para los campos de mantenimiento.
      */
     private fun validarCampos(): Boolean {
         var esValido = true
@@ -198,12 +260,16 @@ class CrearActivity : AppCompatActivity() {
             esValido = false
         }
 
+        if (radioGroupEstado.checkedRadioButtonId == -1) {
+            Toast.makeText(this, "Selecciona el estado de la señal", Toast.LENGTH_SHORT).show()
+            esValido = false
+        }
+
         return esValido
     }
 
     /**
-     * Guarda los datos del formulario como un nuevo documento en la colección "catastros".
-     * Esta función reemplaza la lógica anterior que guardaba "reports".
+     * Guarda o actualiza un catastro en Firestore.
      */
     private fun saveCatastroData() {
         val user = auth.currentUser
@@ -213,31 +279,35 @@ class CrearActivity : AppCompatActivity() {
         }
 
         val existenciaSeleccionada = findViewById<RadioButton>(radioGroupExistencia.checkedRadioButtonId).text.toString()
+        val estadoSeleccionado = findViewById<RadioButton>(radioGroupEstado.checkedRadioButtonId).text.toString()
 
-        // Creación del objeto Catastro con los datos del formulario
-        val catastro = Catastro(
-            nombreSenal = editTextNombreSenal.text.toString().trim(),
-            leyenda = editTextLeyenda.text.toString().trim(),
-            callePrincipal = editTextCallePrincipal.text.toString().trim(),
-            interseccion = editTextInterseccion.text.toString().trim(),
-            numeracion = editTextNumeracion.text.toString().trim(),
-            cantidadPostes = editTextCantidadPostes.text.toString().trim(),
-            tipoPoste = autoCompleteTextViewTipoPoste.text.toString(),
-            medida = editTextMedida.text.toString().trim(),
-            existencia = existenciaSeleccionada,
-            groupId = currentGroupId!!,
-            userUid = user.uid,
-            userName = (currentUserName ?: "Desconocido")
+        val catastroData = mapOf(
+            "nombreSenal" to editTextNombreSenal.text.toString().trim(),
+            "leyenda" to editTextLeyenda.text.toString().trim(),
+            "callePrincipal" to editTextCallePrincipal.text.toString().trim(),
+            "interseccion" to editTextInterseccion.text.toString().trim(),
+            "numeracion" to editTextNumeracion.text.toString().trim(),
+            "cantidadPostes" to editTextCantidadPostes.text.toString().trim(),
+            "tipoPoste" to autoCompleteTextViewTipoPoste.text.toString().trim(),
+            "medida" to editTextMedida.text.toString().trim(),
+            "existencia" to existenciaSeleccionada,
+            "estado" to estadoSeleccionado,
+            "groupId" to currentGroupId!!,
+            "userUid" to user.uid,
+            "userName" to (currentUserName ?: ""),
+            "timestamp" to com.google.firebase.firestore.FieldValue.serverTimestamp()
         )
 
-        // Se guarda el objeto en la nueva colección "catastros"
-        db.collection("catastros").add(catastro)
-            .addOnSuccessListener {
+        val task = if (editCatastroId != null) {
+            db.collection("catastros").document(editCatastroId!!).set(catastroData, com.google.firebase.firestore.SetOptions.merge())
+        } else {
+            db.collection("catastros").add(catastroData)
+        }
+
+        task.addOnSuccessListener { 
                 Toast.makeText(this, "Catastro guardado con éxito", Toast.LENGTH_SHORT).show()
                 finish()
             }
-            .addOnFailureListener { e ->
-                Toast.makeText(this, "Error al guardar el catastro: ${e.message}", Toast.LENGTH_LONG).show()
-            }
+            .addOnFailureListener { e -> Toast.makeText(this, "Error al guardar: ${e.message}", Toast.LENGTH_SHORT).show() }
     }
 }

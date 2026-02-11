@@ -14,9 +14,25 @@
     android:foreground="?attr/selectableItemBackground">
 
     <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/item_container"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:padding="16dp">
+
+        <ImageView
+            android:id="@+id/iv_options_menu"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:clickable="true"
+            android:contentDescription="Opciones del reporte"
+            android:focusable="true"
+            android:padding="8dp"
+            android:src="@drawable/ic_more_vert"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            tools:ignore="HardcodedText,TouchTargetSizeCheck" />
 
         <!-- Título principal del item (ej: Nombre de señal o tipo de mantenimiento) -->
         <TextView
@@ -24,10 +40,11 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:textAppearance="@style/TextAppearance.Material3.TitleMedium"
-            app:layout_constraintEnd_toEndOf="parent"
+            android:layout_marginEnd="12dp"
+            app:layout_constraintEnd_toStartOf="@+id/iv_options_menu"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toTopOf="parent"
-            tools:text="PARE R-1" />
+            tools:text="PARE" />
 
         <!-- Subtítulo del item (ej: Calle o Estado) -->
         <TextView
@@ -36,22 +53,34 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
             android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
-            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintEnd_toStartOf="@+id/iv_options_menu"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/tv_item_title"
-            tools:text="Avenida Siempreviva 123" />
+            tools:text="Av. Principal 123" />
 
-        <!-- Fecha de creación del registro -->
+        <!-- Tercera línea de texto (ej: ID Catastro) -->
+        <TextView
+            android:id="@+id/tv_item_tertiary"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
+            app:layout_constraintEnd_toStartOf="@+id/iv_options_menu"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@+id/tv_item_subtitle"
+            tools:text="ID: 123456789" />
+
         <TextView
             android:id="@+id/tv_item_date"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:textAppearance="@style/TextAppearance.Material3.LabelSmall"
+            android:layout_marginTop="16dp"
+            android:layout_marginEnd="12dp"
+            android.textAppearance="@style/TextAppearance.Material3.LabelSmall"
             android:textColor="?attr/colorOnSurfaceVariant"
             app:layout_constraintEnd_toEndOf="parent"
-            app:layout_constraintTop_toBottomOf="@+id/tv_item_subtitle"
-            tools:text="18/05/2024" />
+            app:layout_constraintTop_toBottomOf="@+id/tv_item_tertiary"
+            tools:text="01/01/2026" />
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 </com.google.android.material.card.MaterialCardView>

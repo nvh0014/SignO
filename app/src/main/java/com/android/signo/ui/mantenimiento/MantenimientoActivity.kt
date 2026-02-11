@@ -1,8 +1,6 @@
 package com.android.signo.ui.mantenimiento
 
 import android.os.Bundle
-import android.widget.ArrayAdapter
-import android.widget.AutoCompleteTextView
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
@@ -25,6 +23,7 @@ import java.util.Date
  */
 data class Mantenimiento(
     val catastroId: String = "", // ID del documento en la colección "catastros"
+    val nombreSenal: String = "",
     val estado: String = "",
     val trabajosRealizados: List<String> = listOf(),
     val observacion: String = "",
@@ -38,7 +37,8 @@ class MantenimientoActivity : AppCompatActivity() {
 
     // --- VISTAS ---
     private lateinit var toolbar: MaterialToolbar
-    private lateinit var autoCompleteBuscarSenal: AutoCompleteTextView
+    private lateinit var editTextBuscarSenal: TextInputEditText
+    private lateinit var buttonBuscarSenal: Button
     private lateinit var editTextNombreSenal: TextInputEditText
     private lateinit var editTextCallePrincipal: TextInputEditText
     private lateinit var radioGroupEstado: RadioGroup
@@ -54,7 +54,10 @@ class MantenimientoActivity : AppCompatActivity() {
     private var currentGroupId: String? = null
     private var currentUserName: String? = null
     private var selectedCatastroId: String? = null // Almacenará el ID del catastro seleccionado
-    private val catastroNameToIdMap = mutableMapOf<String, String>() // Mapa para buscar ID por nombre
+
+    companion object {
+        const val EDIT_MANTENIMIENTO_ID = "EDIT_MANTENIMIENTO_ID"
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -68,11 +71,13 @@ class MantenimientoActivity : AppCompatActivity() {
 
     private fun checkUserAndInitialize() {
         val user = auth.currentUser
-        if (user == null) { /* ... Manejo de usuario no autenticado ... */ return }
+        if (user == null) { /* ... Manejo de usuario no autenticado ... */
+            return
+        }
 
-        db.collection("users").document(user.uid).get().addOnSuccessListener {
-            currentGroupId = it.getString("id_grupo")
-            currentUserName = it.getString("name")
+        db.collection("users").document(user.uid).get().addOnSuccessListener { document ->
+            currentGroupId = document.getString("id_grupo")
+            currentUserName = document.getString("name")
             if (!currentGroupId.isNullOrEmpty()) {
                 initializeUI()
             } else {
@@ -90,7 +95,8 @@ class MantenimientoActivity : AppCompatActivity() {
         toolbar.setNavigationOnClickListener { onBackPressedDispatcher.onBackPressed() }
 
         // Referencias a vistas del layout
-        autoCompleteBuscarSenal = findViewById(R.id.auto_complete_buscar_senal)
+        editTextBuscarSenal = findViewById(R.id.edit_text_buscar_senal)
+        buttonBuscarSenal = findViewById(R.id.button_buscar_senal)
         editTextNombreSenal = findViewById(R.id.edit_text_nombre_senal)
         editTextCallePrincipal = findViewById(R.id.edit_text_calle_principal)
         radioGroupEstado = findViewById(R.id.radiogroup_estado)
@@ -100,7 +106,15 @@ class MantenimientoActivity : AppCompatActivity() {
         editTextObservacion = findViewById(R.id.edit_text_observacion)
         buttonGuardar = findViewById(R.id.button_guardar_mantenimiento)
 
-        setupCatastroSearch()
+        buttonBuscarSenal.setOnClickListener {
+            val numeroId = editTextBuscarSenal.text.toString().trim()
+            if (numeroId.isNotEmpty()) {
+                val catastroIdToSearch = "CAT_$numeroId"
+                searchAndLoadCatastroData(catastroIdToSearch)
+            } else {
+                Toast.makeText(this, "Ingresa un número de ID para cargar los datos.", Toast.LENGTH_SHORT).show()
+            }
+        }
 
         buttonGuardar.setOnClickListener {
             if (validarCampos()) {
@@ -110,58 +124,42 @@ class MantenimientoActivity : AppCompatActivity() {
     }
 
     /**
-     * Configura el AutoCompleteTextView para buscar señales en la colección "catastros".
+     * Busca un catastro por su ID en Firestore y, si lo encuentra, carga sus datos.
      */
-    private fun setupCatastroSearch() {
+    private fun searchAndLoadCatastroData(catastroId: String) {
         if (currentGroupId == null) return
 
-        db.collection("catastros")
-            .whereEqualTo("groupId", currentGroupId)
+        db.collection("catastros").document(catastroId)
             .get()
-            .addOnSuccessListener { documents ->
-                val catastroDisplayList = mutableListOf<String>()
-                catastroNameToIdMap.clear()
-                for (document in documents) {
-                    val catastro = document.toObject(Catastro::class.java)
-                    // Creamos un texto descriptivo para mostrar en el buscador
-                    val displayText = "${catastro.nombreSenal} (ID: ${document.id})"
-                    catastroDisplayList.add(displayText)
-                    catastroNameToIdMap[displayText] = document.id
-                }
-                val adapter = ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, catastroDisplayList)
-                autoCompleteBuscarSenal.setAdapter(adapter)
-            }
-
-        autoCompleteBuscarSenal.setOnItemClickListener { parent, _, position, _ ->
-            val selectedDisplayText = parent.getItemAtPosition(position) as String
-            selectedCatastroId = catastroNameToIdMap[selectedDisplayText]
-            if (selectedCatastroId != null) {
-                loadCatastroData(selectedCatastroId!!)
-            }
-        }
-    }
-
-    /**
-     * Carga los datos del catastro seleccionado en los campos no editables.
-     */
-    private fun loadCatastroData(catastroId: String) {
-        db.collection("catastros").document(catastroId).get()
             .addOnSuccessListener { document ->
-                if (document.exists()) {
+                if (document.exists() && document.getString("groupId") == currentGroupId) {
                     val catastro = document.toObject(Catastro::class.java)
                     catastro?.let {
-                        editTextNombreSenal.setText(it.nombreSenal)
-                        editTextCallePrincipal.setText(it.callePrincipal)
+                        selectedCatastroId = document.id // Guardamos el ID del catastro encontrado
+                        editTextNombreSenal.setText(it.nombreSenal?.toString() ?: "")
+                        editTextCallePrincipal.setText(it.callePrincipal?.toString() ?: "")
+                        Toast.makeText(this, "Señal encontrada y cargada.", Toast.LENGTH_SHORT).show()
                     }
                 } else {
-                    Toast.makeText(this, "Error: No se encontró el catastro.", Toast.LENGTH_SHORT).show()
+                    // Limpia los campos si no se encuentra o no pertenece al grupo
+                    selectedCatastroId = null
+                    editTextNombreSenal.setText("")
+                    editTextCallePrincipal.setText("")
+                    Toast.makeText(this, "No se encontró ninguna señal con ese ID en tu grupo.", Toast.LENGTH_LONG).show()
                 }
             }
+            .addOnFailureListener { e ->
+                selectedCatastroId = null
+                editTextNombreSenal.setText("")
+                editTextCallePrincipal.setText("")
+                Toast.makeText(this, "Error al buscar la señal: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
     }
+
 
     private fun validarCampos(): Boolean {
         if (selectedCatastroId == null) {
-            Toast.makeText(this, "Debes seleccionar una señal del catastro", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Debes buscar y encontrar una señal válida.", Toast.LENGTH_SHORT).show()
             return false
         }
         if (radioGroupEstado.checkedRadioButtonId == -1) {
@@ -187,6 +185,7 @@ class MantenimientoActivity : AppCompatActivity() {
 
         val mantenimiento = Mantenimiento(
             catastroId = selectedCatastroId!!,
+            nombreSenal = editTextNombreSenal.text.toString(),
             estado = estadoSeleccionado,
             trabajosRealizados = trabajosSeleccionados,
             observacion = editTextObservacion.text.toString().trim(),

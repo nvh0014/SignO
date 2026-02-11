@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Colores personalizados para el inventario (modo oscuro) -->
+    <color name="color_catastro_background">#2C2B21</color> <!-- Amarillo oscuro -->
+    <color name="color_mantenimiento_background">#2A283E</color> <!-- Morado oscuro -->
+
+    <!-- Colores amarillos para el tema (modo oscuro) -->
+    <!-- Un poco menos vibrantes para no deslumbrar en fondo oscuro -->
+    <color name="yellow_primary">#D4A106</color>
+    <color name="yellow_dark">#B88B00</color>
+
+    <!-- Otros colores (modo oscuro) -->
+    <color name="orange">#D48700</color>
+    <color name="blue_500">#1A75D1</color>
+</resources>
