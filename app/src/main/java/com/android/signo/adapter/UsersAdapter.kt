@@ -13,7 +13,8 @@ import com.android.signo.model.User
 // Enum para las acciones del menú de usuario
 enum class UserAction {
     PROMOTE_ADMIN,
-    REMOVE_USER
+    REMOVE_USER,
+    DESCEND_USER
 }
 
 class UsersAdapter(
@@ -72,9 +73,15 @@ class UsersAdapter(
             val popup = PopupMenu(view.context, view)
             popup.inflate(R.menu.user_options_menu)
 
-            // Ocultar la opción de "Ascender" si el usuario ya es admin
+            val promoteAdminItem = popup.menu.findItem(R.id.action_promote_admin)
+            val descendUserItem = popup.menu.findItem(R.id.action_descend_user)
+
             if (user.rol == "admin") {
-                popup.menu.findItem(R.id.action_promote_admin).isVisible = false
+                promoteAdminItem.isVisible = false
+                descendUserItem.isVisible = true
+            } else {
+                promoteAdminItem.isVisible = true
+                descendUserItem.isVisible = false
             }
 
             popup.setOnMenuItemClickListener { item ->
@@ -85,6 +92,10 @@ class UsersAdapter(
                     }
                     R.id.action_remove_user -> {
                         onOptionClicked(user, UserAction.REMOVE_USER)
+                        true
+                    }
+                    R.id.action_descend_user -> {
+                        onOptionClicked(user, UserAction.DESCEND_USER)
                         true
                     }
                     else -> false

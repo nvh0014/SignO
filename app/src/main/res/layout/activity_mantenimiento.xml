@@ -162,7 +162,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Trabajos Realizados"
+                android:text="*Trabajos Realizados"
                 android:fontFamily="@font/inter_medium"
                 android:textColor="?attr/colorOnSurfaceVariant"
                 android:layout_marginStart="4dp"

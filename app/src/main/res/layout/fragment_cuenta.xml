@@ -4,7 +4,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:padding="16dp"
+    android:padding="@dimen/margin_standard"
     tools:context=".ui.cuenta.CuentaFragment">
 
     <TextView
@@ -17,20 +17,21 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
-    <!-- Card de Información de Usuario -->
     <com.google.android.material.card.MaterialCardView
         android:id="@+id/user_info_card"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="24dp"
+        android:layout_marginTop="@dimen/margin_large"
         app:cardElevation="4dp"
-        app:layout_constraintTop_toBottomOf="@id/tv_account_title">
+        app:layout_constraintTop_toBottomOf="@id/tv_account_title"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="16dp">
+            android:padding="@dimen/margin_standard">
 
             <TextView
                 android:id="@+id/tv_user_name"
@@ -48,18 +49,18 @@
                 android:fontFamily="@font/inter_medium"
                 android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
                 tools:text="usuario@email.com" />
-
         </LinearLayout>
     </com.google.android.material.card.MaterialCardView>
 
-    <!-- Contenedor para la gestión de grupos -->
     <LinearLayout
         android:id="@+id/group_management_container"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:layout_marginTop="32dp"
-        app:layout_constraintTop_toBottomOf="@id/user_info_card">
+        android:layout_marginTop="@dimen/margin_extra_large"
+        app:layout_constraintTop_toBottomOf="@id/user_info_card"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
 
         <TextView
             android:id="@+id/tv_group_status"
@@ -69,7 +70,6 @@
             android:fontFamily="@font/inter_medium"
             android:text="No perteneces a ningún grupo." />
 
-        <!-- Vistas para mostrar la información del grupo -->
         <TextView
             android:id="@+id/tv_group_name"
             android:layout_width="wrap_content"
@@ -88,23 +88,22 @@
             android:textAppearance="@style/TextAppearance.Material3.BodySmall"
             android:textColor="?android:attr/textColorSecondary"
             android:visibility="gone"
-            tools:text="ID: aBcDeFgHiJkLmNoPqRsT"
+            tools:text="ID: XXXXXX"
             tools:visibility="visible" />
-        
+
         <Button
             android:id="@+id/btn_admin_group"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
+            android:layout_marginTop="@dimen/margin_standard"
             android:text="Administrar Grupo"
-            android:visibility="gone"
-            tools:visibility="visible"/>
+            android:visibility="gone" />
 
         <Button
             android:id="@+id/btn_create_group"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
+            android:layout_marginTop="@dimen/margin_standard"
             android:text="Crear un Grupo" />
 
         <Button
@@ -112,10 +111,23 @@
             style="@style/Widget.Material3.Button.OutlinedButton"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="@dimen/margin_small"
             android:text="Unirse a un Grupo" />
 
     </LinearLayout>
+
+    <Button
+        android:id="@+id/btn_logout"
+        style="@style/Widget.Material3.Button.TextButton"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="@dimen/margin_standard"
+        android:fontFamily="@font/inter_semibold"
+        android:text="Cerrar Sesión"
+        android:textColor="@color/design_default_color_error"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
 
     <ProgressBar
         android:id="@+id/progress_bar"
@@ -127,18 +139,5 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
-
-    <Button
-        android:id="@+id/btn_logout"
-        style="@style/Widget.Material3.Button.TextButton"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="16dp"
-        android:fontFamily="@font/inter_semibold"
-        android:text="Cerrar Sesión"
-        android:textColor="@color/design_default_color_error"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

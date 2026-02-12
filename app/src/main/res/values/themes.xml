@@ -4,6 +4,7 @@
         <!-- Primary brand color. -->
         <item name="colorPrimary">@color/yellow_primary</item>
         <item name="colorPrimaryVariant">@color/yellow_dark</item>
+        <item name="colorOnPrimary">@color/black</item>
 
         <!-- Secondary brand color. -->
         <item name="colorSecondary">@color/yellow_primary</item>

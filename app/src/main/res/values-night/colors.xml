@@ -11,5 +11,5 @@
 
     <!-- Otros colores (modo oscuro) -->
     <color name="orange">#D48700</color>
-    <color name="blue_500">#1A75D1</color>
+    <color name="blue_500">#009688</color>
 </resources>

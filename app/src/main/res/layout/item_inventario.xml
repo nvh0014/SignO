@@ -68,7 +68,7 @@
             app:layout_constraintEnd_toStartOf="@+id/iv_options_menu"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@+id/tv_item_subtitle"
-            tools:text="ID: 123456789" />
+            tools:text="ID: CAT_1234" />
 
         <TextView
             android:id="@+id/tv_item_date"

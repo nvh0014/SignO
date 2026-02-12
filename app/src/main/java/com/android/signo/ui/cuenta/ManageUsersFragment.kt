@@ -62,6 +62,9 @@ class ManageUsersFragment : Fragment() {
             UserAction.REMOVE_USER -> {
                 showConfirmationDialog("Eliminar Usuario", "¿Estás seguro de que quieres eliminar a ${user.name} del grupo?", user, action)
             }
+            UserAction.DESCEND_USER -> {
+                showConfirmationDialog("Descender de Administrador", "¿Estás seguro de que quieres descender de ${user.name} a usuario?", user, action)
+            }
         }
     }
 
@@ -69,17 +72,16 @@ class ManageUsersFragment : Fragment() {
         AlertDialog.Builder(requireContext())
             .setTitle(title)
             .setMessage(message)
-            .setPositiveButton("Confirmar") { _, _ ->
-                if (action == UserAction.PROMOTE_ADMIN) {
-                    updateUserRole(user, "admin")
-                } else {
-                    updateUserRole(user, "") // Vaciar el rol y el id_grupo
+            .setPositiveButton("Confirmar") { s_, _ ->
+                when (action) {
+                    UserAction.PROMOTE_ADMIN -> updateUserRole(user, "admin")
+                    UserAction.REMOVE_USER -> updateUserRole(user, "")
+                    UserAction.DESCEND_USER -> updateUserRole(user, "usuario")
                 }
             }
             .setNegativeButton("Cancelar", null)
             .show()
     }
-
     private fun updateUserRole(user: User, newRole: String) {
         val updates = if (newRole.isEmpty()) {
             mapOf("rol" to "usuario", "id_grupo" to "")
@@ -89,7 +91,11 @@ class ManageUsersFragment : Fragment() {
 
         db.collection("users").document(user.id).update(updates)
             .addOnSuccessListener {
-                val message = if(newRole.isEmpty()) "Usuario eliminado del grupo" else "Usuario ascendido a administrador"
+                val message = when (newRole) {
+                    "admin" -> "Usuario ascendido a administrador"
+                    "usuario" -> "Usuario descendido a usuario"
+                    else -> "Usuario eliminado del grupo"
+                }
                 Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                 loadGroupMembers() // Recargar la lista
             }
@@ -97,7 +103,6 @@ class ManageUsersFragment : Fragment() {
                 Toast.makeText(context, "Error al actualizar usuario: ${e.message}", Toast.LENGTH_LONG).show()
             }
     }
-
     private fun loadGroupMembers() {
         binding.progressBar.visibility = View.VISIBLE
         binding.tvStatusMessage.visibility = View.GONE

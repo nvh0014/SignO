@@ -22,6 +22,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import com.android.signo.utils.isNetworkAvailable
 
 enum class InventoryType { CATASTROS, MANTENIMIENTOS }
 
@@ -61,7 +62,28 @@ class InventarioFragment : Fragment() {
         super.onViewCreated(view, savedInstanceState)
         setupRecyclerView()
         setupChipGroupListener()
+        setupSearchButton()
         checkUserGroupAndLoadInventory()
+    }
+
+    private fun setupSearchButton() {
+        binding.buttonBuscar.setOnClickListener {
+            val query = binding.editTextBuscar.text.toString().trim()
+
+            // --- NUEVO: VALIDAR CONEXIÓN PARA BÚSQUEDA ---
+            if (query.isNotEmpty() && !isNetworkAvailable(requireContext())) {
+                Toast.makeText(requireContext(), "Necesitas internet para buscar por ID específico.", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            // ---------------------------------------------
+
+            if (query.isNotEmpty()) {
+                searchInventoryById(query)
+            } else {
+                resetPagination()
+                loadInventory(true)
+            }
+        }
     }
 
     /**
@@ -198,7 +220,58 @@ class InventarioFragment : Fragment() {
             }
     }
 
+    private fun searchInventoryById(id: String) {
+        if (currentGroupId == null) return
+
+        val collectionPath = if (currentInventoryType == InventoryType.CATASTROS) "catastros" else "mantenimientos"
+
+        // Asegúrate de mantener el prefijo si lo usas, si no, usa solo 'id'
+        val docId = if (currentInventoryType == InventoryType.CATASTROS) "CAT_$id" else id
+
+        db.collection(collectionPath).document(docId)
+            .get()
+            .addOnSuccessListener { document ->
+                if (document.exists() && document.getString("groupId") == currentGroupId) {
+                    val item = if (currentInventoryType == InventoryType.CATASTROS) {
+                        document.toObject(Catastro::class.java)
+                    } else {
+                        document.toObject(Mantenimiento::class.java)
+                    }
+
+                    if (item != null) {
+                        inventarioAdapter.setData(listOf(Pair(document.id, item)))
+                        isDataEnd = true
+                        binding.tvStatusMessage.visibility = View.GONE // Ocultar mensaje si hay éxito
+                    } else {
+                        showStatusMessage("Error al procesar el registro.")
+                    }
+                } else {
+                    // Si existe pero es de otro grupo, o si el ID coincide pero no hay datos
+                    inventarioAdapter.setData(emptyList())
+                    showStatusMessage("No se encontró un registro con ese ID.")
+                }
+            }
+            .addOnFailureListener { e ->
+                // AQUÍ ESTÁ LA SOLUCIÓN:
+                // Si el error es de PERMISOS, asumimos que es porque el documento no existe
+                // y por tanto la regla de seguridad falló al intentar leerlo.
+                if (e.message?.contains("PERMISSION_DENIED") == true) {
+                    inventarioAdapter.setData(emptyList())
+                    showStatusMessage("No se encontró un registro con ese ID.")
+                } else {
+                    showError("Error al buscar: ${e.message}")
+                }
+            }
+    }
+
     private fun handleItemAction(itemId: String, item: Any, action: InventarioAction) {
+        // --- NUEVO: VERIFICACIÓN DE CONEXIÓN ---
+        if (!isNetworkAvailable(requireContext())) {
+            Toast.makeText(requireContext(), "Modo Offline: No puedes editar ni eliminar sin internet.", Toast.LENGTH_SHORT).show()
+            return
+        }
+        // ---------------------------------------
+
         when (action) {
             InventarioAction.EDIT -> {
                 when (item) {
@@ -262,7 +335,14 @@ class InventarioFragment : Fragment() {
      */
     override fun onResume() {
         super.onResume()
+
+        // Verificamos conexión al entrar
+        if (!isNetworkAvailable(requireContext())) {
+            Toast.makeText(requireContext(), "Sin conexión: Mostrando datos guardados.", Toast.LENGTH_LONG).show()
+        }
+
         if (currentGroupId != null) {
+            // Firestore es inteligente: si no hay red, loadInventory cargará desde la caché automáticamente
             resetPagination()
             loadInventory(true)
         }

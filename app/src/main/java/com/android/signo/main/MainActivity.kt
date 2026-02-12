@@ -10,8 +10,11 @@ import com.android.signo.R
 import com.android.signo.databinding.ActivityMainBinding
 import com.android.signo.login.LoginActivity
 import com.android.signo.ui.crear.CrearActivity
-import com.android.signo.ui.mantenimiento.MantenimientoActivity // Importamos la nueva actividad
+import com.android.signo.ui.mantenimiento.MantenimientoActivity
 import com.google.firebase.auth.FirebaseAuth
+// IMPORTANTE: Importa tus utilidades
+import com.android.signo.utils.SyncHelper
+import com.android.signo.utils.isNetworkAvailable
 
 class MainActivity : AppCompatActivity() {
 
@@ -34,24 +37,32 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // --- AQUÍ SE AGREGA EL ONRESUME ---
+    override fun onResume() {
+        super.onResume()
+
+        // Verificamos si hay internet. Si hay, intentamos subir los catastros pendientes.
+        if (isNetworkAvailable(this)) {
+            // Usamos 'applicationContext' para evitar problemas si la actividad se cierra mientras sincroniza
+            SyncHelper(applicationContext).syncPendingCatastros()
+        }
+    }
+    // ----------------------------------
+
     private fun setupNavigation() {
         val navHostFragment = supportFragmentManager
             .findFragmentById(R.id.nav_host_fragment) as NavHostFragment
         val navController = navHostFragment.navController
 
-        binding.bottomNavView.setupWithNavController(navController)
+        binding.apply {
+            bottomNavView.setupWithNavController(navController)
 
-        // --- MODIFICACIÓN DEL BOTÓN FLOTANTE ---
-        // Ahora el botón llamará a la función que muestra el diálogo de selección.
-        binding.fabAdd.setOnClickListener {
-            showCreationDialog()
+            fabAdd.setOnClickListener {
+                showCreationDialog()
+            }
         }
     }
 
-    /**
-     * Muestra un diálogo de alerta para que el usuario elija qué desea crear:
-     * un nuevo catastro o un nuevo mantenimiento.
-     */
     private fun showCreationDialog() {
         val options = arrayOf("Nuevo Catastro", "Nuevo Mantenimiento")
 
@@ -60,12 +71,10 @@ class MainActivity : AppCompatActivity() {
         builder.setItems(options) { dialog, which ->
             when (which) {
                 0 -> {
-                    // Opción "Nuevo Catastro"
                     val intent = Intent(this, CrearActivity::class.java)
                     startActivity(intent)
                 }
                 1 -> {
-                    // Opción "Nuevo Mantenimiento"
                     val intent = Intent(this, MantenimientoActivity::class.java)
                     startActivity(intent)
                 }

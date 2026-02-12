@@ -4,6 +4,10 @@
         android:id="@+id/action_promote_admin"
         android:title="Ascender a Administrador" />
     <item
+        android:id="@+id/action_descend_user"
+        android:title="Descender de Administrador" />
+    <item
         android:id="@+id/action_remove_user"
         android:title="Eliminar del grupo" />
+
 </menu>

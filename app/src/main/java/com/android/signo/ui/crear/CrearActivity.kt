@@ -9,6 +9,7 @@ import android.widget.RadioButton
 import android.widget.RadioGroup
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import com.android.signo.utils.isNetworkAvailable
 import com.android.signo.R
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.textfield.TextInputEditText
@@ -106,18 +107,30 @@ class CrearActivity : AppCompatActivity() {
                     currentGroupId = document.getString("id_grupo")
                     currentUserName = document.getString("name")
                     if (currentGroupId.isNullOrEmpty()) {
-                        Toast.makeText(this, "Debes unirte a un grupo para crear/editar un catastro.", Toast.LENGTH_LONG).show()
+                        Toast.makeText(
+                            this,
+                            "Debes unirte a un grupo para crear/editar un catastro.",
+                            Toast.LENGTH_LONG
+                        ).show()
                         finish()
                     } else {
                         initializeUI()
                     }
                 } else {
-                    Toast.makeText(this, "No se encontraron datos de tu usuario.", Toast.LENGTH_LONG).show()
+                    Toast.makeText(
+                        this,
+                        "No se encontraron datos de tu usuario.",
+                        Toast.LENGTH_LONG
+                    ).show()
                     finish()
                 }
             }
             .addOnFailureListener { exception ->
-                Toast.makeText(this, "Error al verificar tu estado: ${exception.message}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(
+                    this,
+                    "Error al verificar tu estado: ${exception.message}",
+                    Toast.LENGTH_SHORT
+                ).show()
                 finish()
             }
     }
@@ -183,12 +196,20 @@ class CrearActivity : AppCompatActivity() {
                         val catastro = document.toObject(Catastro::class.java)
                         catastro?.let { populateUIWithCatastro(it) }
                     } else {
-                        Toast.makeText(this, "Error: No se encontró el catastro.", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(
+                            this,
+                            "Error: No se encontró el catastro.",
+                            Toast.LENGTH_SHORT
+                        ).show()
                         finish()
                     }
                 }
                 .addOnFailureListener {
-                    Toast.makeText(this, "Error al cargar los datos del catastro.", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(
+                        this,
+                        "Error al cargar los datos del catastro.",
+                        Toast.LENGTH_SHORT
+                    ).show()
                 }
         }
     }
@@ -206,7 +227,7 @@ class CrearActivity : AppCompatActivity() {
         autoCompleteTextViewTipoPoste.setText(catastro.tipoPoste?.toString() ?: "", false)
         editTextMedida.setText(catastro.medida?.toString() ?: "")
 
-        if (catastro.existencia?.toString() == "Sí") {
+        if (catastro.existencia?.toString() == "Si") {
             radioGroupExistencia.check(R.id.radio_si_existe)
         } else if (catastro.existencia?.toString() == "No") {
             radioGroupExistencia.check(R.id.radio_no_existe)
@@ -273,15 +294,20 @@ class CrearActivity : AppCompatActivity() {
      */
     private fun saveCatastroData() {
         val user = auth.currentUser
-        if (user == null || currentGroupId == null) {
-            Toast.makeText(this, "No se puede guardar: Usuario o grupo no identificado.", Toast.LENGTH_LONG).show()
-            return
-        }
+        if (user == null || currentGroupId == null) return
 
-        val existenciaSeleccionada = findViewById<RadioButton>(radioGroupExistencia.checkedRadioButtonId).text.toString()
-        val estadoSeleccionado = findViewById<RadioButton>(radioGroupEstado.checkedRadioButtonId).text.toString()
+        // 1. BLOQUEAR EL BOTÓN para evitar duplicados por doble click
+        buttonGuardar.isEnabled = false
+        buttonGuardar.text = "Guardando..."
 
-        val catastroData = mapOf(
+        // ... (Tu código de obtención de datos y RadioButtons sigue igual) ...
+        // Copia aquí tu parte de obtener idExistencia, idEstado, y crear el mapa catastroData...
+        val idExistencia = radioGroupExistencia.checkedRadioButtonId
+        val idEstado = radioGroupEstado.checkedRadioButtonId
+        val existenciaSeleccionada = if (idExistencia != -1) findViewById<RadioButton>(idExistencia).text.toString() else ""
+        val estadoSeleccionado = if (idEstado != -1) findViewById<RadioButton>(idEstado).text.toString() else ""
+
+        val catastroData = mutableMapOf(
             "nombreSenal" to editTextNombreSenal.text.toString().trim(),
             "leyenda" to editTextLeyenda.text.toString().trim(),
             "callePrincipal" to editTextCallePrincipal.text.toString().trim(),
@@ -297,17 +323,71 @@ class CrearActivity : AppCompatActivity() {
             "userName" to (currentUserName ?: ""),
             "timestamp" to com.google.firebase.firestore.FieldValue.serverTimestamp()
         )
+        // ... (Fin de obtención de datos) ...
 
-        val task = if (editCatastroId != null) {
-            db.collection("catastros").document(editCatastroId!!).set(catastroData, com.google.firebase.firestore.SetOptions.merge())
+        // --- LÓGICA DE GUARDADO ---
+
+        if (editCatastroId != null && !editCatastroId!!.startsWith("TEMP_")) {
+            // MODO EDICIÓN NORMAL (Online u Offline funciona igual con merge)
+            db.collection("catastros").document(editCatastroId!!)
+                .set(catastroData, com.google.firebase.firestore.SetOptions.merge())
+                .addOnSuccessListener {
+                    Toast.makeText(this, "Catastro actualizado", Toast.LENGTH_SHORT).show()
+                    finish()
+                }
+                .addOnFailureListener {
+                    buttonGuardar.isEnabled = true // Reactivar si falla
+                    buttonGuardar.text = "Guardar Catastro"
+                    Toast.makeText(this, "Error: ${it.message}", Toast.LENGTH_SHORT).show()
+                }
         } else {
-            db.collection("catastros").add(catastroData)
-        }
+            // MODO CREACIÓN (O edición de un temporal)
+            if (isNetworkAvailable(this)) {
+                // --- CON INTERNET: Usamos Transacción y Contador ---
+                val docRefContador = db.collection("counters").document("catastro_counter")
+                val oldTempId = if (editCatastroId?.startsWith("TEMP_") == true) editCatastroId else null
 
-        task.addOnSuccessListener { 
-                Toast.makeText(this, "Catastro guardado con éxito", Toast.LENGTH_SHORT).show()
-                finish()
+                db.runTransaction { transaction ->
+                    val snapshot = transaction.get(docRefContador)
+                    val currentCount = snapshot.getLong("count") ?: 0 // Ojo: Asegúrate que tu contador en Firebase no sea null
+                    val nextCount = currentCount + 1
+                    val nuevoId = "CAT_$nextCount"
+
+                    transaction.update(docRefContador, "count", nextCount)
+
+                    catastroData["isTemp"] = false
+                    val nuevoCatastroRef = db.collection("catastros").document(nuevoId)
+                    transaction.set(nuevoCatastroRef, catastroData)
+
+                    nuevoId
+                }.addOnSuccessListener { nuevoId ->
+                    if (oldTempId != null) db.collection("catastros").document(oldTempId).delete()
+                    Toast.makeText(this, "Guardado exitoso: $nuevoId", Toast.LENGTH_SHORT).show()
+                    finish()
+                }.addOnFailureListener {
+                    buttonGuardar.isEnabled = true
+                    buttonGuardar.text = "Guardar Catastro"
+                    Toast.makeText(this, "Error online: ${it.message}", Toast.LENGTH_SHORT).show()
+                }
+
+            } else {
+                // --- SIN INTERNET: Mensaje especial y guardado local ---
+                val tempId = if (editCatastroId?.startsWith("TEMP_") == true) editCatastroId!! else "TEMP_${System.currentTimeMillis()}"
+                catastroData["isTemp"] = true
+
+                db.collection("catastros").document(tempId)
+                    .set(catastroData)
+                    .addOnSuccessListener {
+                        // AQUÍ ESTÁ EL MENSAJE QUE PEDISTE
+                        Toast.makeText(this, "Sin conexión. Se subirá automáticamente cuando tengas internet.", Toast.LENGTH_LONG).show()
+                        finish()
+                    }
+                    .addOnFailureListener {
+                        // Incluso si falla (raro en local), reactivamos botón
+                        buttonGuardar.isEnabled = true
+                        buttonGuardar.text = "Guardar Catastro"
+                    }
             }
-            .addOnFailureListener { e -> Toast.makeText(this, "Error al guardar: ${e.message}", Toast.LENGTH_SHORT).show() }
+        }
     }
 }

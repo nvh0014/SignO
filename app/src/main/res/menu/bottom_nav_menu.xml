@@ -12,9 +12,9 @@
         android:title="Inventario" />
 
     <item
-        android:id="@+id/navigation_add"
+        android:id="@+id/fab_placeholder"
         android:title=""
-        android:enabled="false" />
+        android:enabled="false"/>
 
     <item
         android:id="@+id/navigation_cuenta"

@@ -290,7 +290,11 @@ class ExportarFragment : Fragment() {
                 }
 
             } catch (t: Throwable) {
-                resolver.delete(uri, null, null)
+                // If it fails, try to delete the partial file
+                try {
+                    resolver.delete(uri, null, null)
+                } catch (e: Exception) { e.printStackTrace() }
+
                 withContext(Dispatchers.Main) {
                     Toast.makeText(requireContext(), "Error en la exportación: ${t.message}", Toast.LENGTH_LONG).show()
                 }
@@ -313,6 +317,7 @@ class ExportarFragment : Fragment() {
             .orderBy("timestamp", Query.Direction.ASCENDING)
     }
 
+    // FIXED: Corrected escaping syntax for CSV
     private fun escapeCsvField(data: String?): String {
         if (data == null) return ""
         if (data.contains(",") || data.contains("\"") || data.contains("\n")) {
@@ -360,17 +365,25 @@ class ExportarFragment : Fragment() {
         setLoading(true, "Verificando permisos...")
         db.collection("users").document(user.uid).get().addOnSuccessListener { documentSnapshot ->
             if (context == null) return@addOnSuccessListener
+
+            val userRole = documentSnapshot.getString("rol")
             currentGroupId = documentSnapshot.getString("id_grupo")
-            if (currentGroupId == null) {
-                showError("No perteneces a ningún grupo.")
+
+            if (userRole == "admin") {
+                if (currentGroupId == null) {
+                    showError("No perteneces a ningún grupo.")
+                } else {
+                    setLoading(false)
+                    binding.exportContent.visibility = View.VISIBLE
+                    binding.tvStatusMessage.visibility = View.GONE
+                }
             } else {
-                setLoading(false)
-                binding.exportContent.visibility = View.VISIBLE
-                binding.tvStatusMessage.visibility = View.GONE
+                showError("Solo los administradores pueden exportar datos. Contacte con su administrador.")
             }
+
         }.addOnFailureListener {
             if (context == null) return@addOnFailureListener
-            showError("Error al verificar tu grupo.")
+            showError("Error al verificar tu rol.")
         }
     }
 
