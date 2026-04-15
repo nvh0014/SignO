@@ -54,8 +54,9 @@ class ExportarFragment : Fragment() {
     private var startDate: Date? = null
     private var endDate: Date? = null
 
-    private val PREVIEW_LIMIT = 50L
-    private val PREVIEW_THRESHOLD = 70L
+    // Configuraciones de rendimiento
+    private val PREVIEW_LIMIT = 3L
+    private val PREVIEW_THRESHOLD = 5L
     private val EXPORT_BATCH_SIZE = 500L
 
     private val requestPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
@@ -84,6 +85,7 @@ class ExportarFragment : Fragment() {
         inventarioAdapter = InventarioAdapter(mutableListOf(), false) { _, _, _ -> }
         binding.rvItemsToExport.adapter = inventarioAdapter
         binding.rvItemsToExport.layoutManager = LinearLayoutManager(context)
+        binding.rvItemsToExport.isNestedScrollingEnabled = false
     }
 
     private fun setupListeners() {
@@ -93,6 +95,12 @@ class ExportarFragment : Fragment() {
                 R.id.chip_mantenimientos -> ExportType.MANTENIMIENTOS
                 else -> ExportType.CATASTROS
             }
+
+            startDate = null
+            endDate = null
+            binding.etStartDate.text = null
+            binding.etEndDate.text = null
+            binding.tvStatusMessage.visibility = View.GONE
             clearPreview()
         }
 
@@ -155,7 +163,7 @@ class ExportarFragment : Fragment() {
 
             if (count > PREVIEW_THRESHOLD) {
                 setLoading(false)
-                Toast.makeText(requireContext(), "Se encontraron $count registros. Vista previa omitida para mejorar el rendimiento.", Toast.LENGTH_LONG).show()
+                Toast.makeText(requireContext(), "Se encontraron $count registros. Vista previa omitida para mejorar rendimiento.", Toast.LENGTH_LONG).show()
                 binding.btnExport.isEnabled = true
                 return@addOnSuccessListener
             }
@@ -204,7 +212,7 @@ class ExportarFragment : Fragment() {
     }
 
     private fun startCsvExport() {
-        setLoading(true, "Exportando... Por favor, espere.")
+        setLoading(true, "Exportando... Esto puede tomar unos momentos.")
 
         lifecycleScope.launch(Dispatchers.IO) {
             val sheetName = if (currentExportType == ExportType.CATASTROS) "Catastros" else "Mantenimientos"
@@ -234,10 +242,20 @@ class ExportarFragment : Fragment() {
             try {
                 resolver.openOutputStream(uri)?.use { outputStream ->
                     outputStream.bufferedWriter(Charsets.UTF_8).use { writer ->
+
+                        // BOM para Excel
+                        writer.write("\uFEFF")
+
+                        // Cabeceras
                         val headers = if (currentExportType == ExportType.CATASTROS) {
                             listOf("Nombre Señal", "Leyenda", "Calle Principal", "Intersección", "Numeración", "Cant. Postes", "Tipo Poste", "Medida", "Existencia", "Registrado por", "Fecha")
                         } else {
-                            listOf("ID Catastro", "Estado", "Trabajos Realizados", "Observación", "Realizado por", "Fecha")
+                            listOf(
+                                "ID", "Nombre Señal", "Calle Principal", "Numeración", "Intersección",
+                                "Leyenda", "Cant. Postes", "Tipo Poste", "Medida", "Existencia",
+                                "ESTADO SEÑAL", "PODADO", "PINTADO", "LIMPIEZA",
+                                "Observación", "Realizado por", "Fecha"
+                            )
                         }
                         writer.write(headers.joinToString(","))
                         writer.newLine()
@@ -252,12 +270,13 @@ class ExportarFragment : Fragment() {
                             if (documents.isEmpty) break
 
                             val objectClass = if (currentExportType == ExportType.CATASTROS) Catastro::class.java else Mantenimiento::class.java
+
                             for (doc in documents) {
                                 val item = doc.toObject(objectClass)
                                 val row = if (currentExportType == ExportType.CATASTROS) {
                                     createCatastroCsvRow(item as Catastro)
                                 } else {
-                                    createMantenimientoCsvRow(item as Mantenimiento)
+                                    createMantenimientoCsvRowCompleto(item as Mantenimiento)
                                 }
                                 writer.write(row)
                                 writer.newLine()
@@ -290,13 +309,12 @@ class ExportarFragment : Fragment() {
                 }
 
             } catch (t: Throwable) {
-                // If it fails, try to delete the partial file
                 try {
                     resolver.delete(uri, null, null)
                 } catch (e: Exception) { e.printStackTrace() }
 
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(requireContext(), "Error en la exportación: ${t.message}", Toast.LENGTH_LONG).show()
+                    Toast.makeText(requireContext(), "Error: ${t.message}", Toast.LENGTH_LONG).show()
                 }
                 t.printStackTrace()
             } finally {
@@ -317,7 +335,6 @@ class ExportarFragment : Fragment() {
             .orderBy("timestamp", Query.Direction.ASCENDING)
     }
 
-    // FIXED: Corrected escaping syntax for CSV
     private fun escapeCsvField(data: String?): String {
         if (data == null) return ""
         if (data.contains(",") || data.contains("\"") || data.contains("\n")) {
@@ -327,7 +344,8 @@ class ExportarFragment : Fragment() {
     }
 
     private fun createCatastroCsvRow(catastro: Catastro): String {
-        val sdf = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
+        // CAMBIO: SOLO FECHA (dd/MM/yyyy)
+        val sdf = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
         val data = listOf(
             catastro.nombreSenal?.toString() ?: "",
             catastro.leyenda?.toString() ?: "",
@@ -344,12 +362,50 @@ class ExportarFragment : Fragment() {
         return data.joinToString(",") { escapeCsvField(it) }
     }
 
-    private fun createMantenimientoCsvRow(mantenimiento: Mantenimiento): String {
-        val sdf = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.getDefault())
+    private suspend fun createMantenimientoCsvRowCompleto(mantenimiento: Mantenimiento): String {
+        // CAMBIO: SOLO FECHA (dd/MM/yyyy)
+        val sdf = SimpleDateFormat("dd/MM/yyyy", Locale.getDefault())
+
+        var catastro: Catastro? = null
+        try {
+            val doc = db.collection("catastros").document(mantenimiento.catastroId).get().await()
+            if (doc.exists()) {
+                catastro = doc.toObject(Catastro::class.java)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        val nombre = catastro?.nombreSenal?.toString() ?: mantenimiento.nombreSenal
+        val calle = catastro?.callePrincipal?.toString() ?: ""
+        val numeracion = catastro?.numeracion?.toString() ?: ""
+        val interseccion = catastro?.interseccion?.toString() ?: ""
+        val leyenda = catastro?.leyenda?.toString() ?: ""
+        val cantPostes = catastro?.cantidadPostes?.toString() ?: ""
+        val tipoPoste = catastro?.tipoPoste?.toString() ?: ""
+        val medida = catastro?.medida?.toString() ?: ""
+        val existencia = catastro?.existencia?.toString() ?: ""
+
+        val estado = mantenimiento.estado
+        val isPodado = if (mantenimiento.trabajosRealizados.contains("Podado")) "x" else ""
+        val isPintado = if (mantenimiento.trabajosRealizados.contains("Pintado")) "x" else ""
+        val isLimpieza = if (mantenimiento.trabajosRealizados.contains("Limpieza")) "x" else ""
+
         val data = listOf(
             mantenimiento.catastroId,
-            mantenimiento.estado,
-            mantenimiento.trabajosRealizados.joinToString("; "),
+            nombre,
+            calle,
+            numeracion,
+            interseccion,
+            leyenda,
+            cantPostes,
+            tipoPoste,
+            medida,
+            existencia,
+            estado,
+            isPodado,
+            isPintado,
+            isLimpieza,
             mantenimiento.observacion,
             mantenimiento.userName,
             mantenimiento.timestamp?.let { sdf.format(it) } ?: ""
@@ -378,7 +434,7 @@ class ExportarFragment : Fragment() {
                     binding.tvStatusMessage.visibility = View.GONE
                 }
             } else {
-                showError("Solo los administradores pueden exportar datos. Contacte con su administrador.")
+                showError("Solo los administradores pueden exportar datos.")
             }
 
         }.addOnFailureListener {
@@ -401,9 +457,9 @@ class ExportarFragment : Fragment() {
 
     private fun handleFirestoreError(exception: Exception) {
         val message = if (exception.message?.contains("FAILED PRECONDITION") == true) {
-            "Error: La consulta requiere un índice de Firestore que no existe. Revisa el Logcat para encontrar el enlace directo para crearlo."
+            "Error: Requiere un índice en Firestore. Revisa el Logcat."
         } else {
-            "Error al cargar o deserializar: ${exception.message}"
+            "Error: ${exception.message}"
         }
         Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show()
     }

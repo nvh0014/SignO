@@ -17,8 +17,8 @@
             android:id="@+id/tv_title"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginStart="@dimen/margin_standard"
-            android:layout_marginTop="@dimen/margin_standard"
+            android:layout_marginStart="16dp"
+            android:layout_marginTop="16dp"
             android:fontFamily="@font/inter_semibold"
             android:text="Inventario"
             android:textAppearance="@style/TextAppearance.Material3.HeadlineSmall"
@@ -29,22 +29,22 @@
             android:id="@+id/button_buscar"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:minWidth="100dp"
+            android:layout_marginEnd="16dp"
             android:text="Buscar"
-            android:layout_marginEnd="@dimen/margin_standard"
             app:layout_constraintBottom_toBottomOf="@+id/text_input_layout_buscar"
             app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintTop_toTopOf="@+id/text_input_layout_buscar" />
 
         <com.google.android.material.textfield.TextInputLayout
             android:id="@+id/text_input_layout_buscar"
-            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
+            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="@dimen/margin_standard"
-            android:layout_marginTop="@dimen/margin_small"
-            android:layout_marginEnd="@dimen/margin_small"
-            android:hint="Buscar por ID"
+            android:layout_marginStart="16dp"
+            android:layout_marginTop="12dp"
+            android:layout_marginEnd="8dp"
+            android:hint="ID o Calle (Ej: Arturo Prat)"
+            app:endIconMode="clear_text"
             app:layout_constraintEnd_toStartOf="@+id/button_buscar"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/tv_title">
@@ -53,7 +53,9 @@
                 android:id="@+id/edit_text_buscar"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:inputType="text"
+                android:fontFamily="@font/inter_medium"
+                android:imeOptions="actionSearch"
+                android:inputType="textCapCharacters"
                 android:maxLines="1" />
         </com.google.android.material.textfield.TextInputLayout>
 
@@ -61,17 +63,20 @@
             android:id="@+id/chip_group_inventory_type"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginTop="@dimen/margin_small"
+            android:layout_marginTop="8dp"
+            app:selectionRequired="true"
             app:singleSelection="true"
-            app:layout_constraintTop_toBottomOf="@+id/text_input_layout_buscar"
+            app:layout_constraintEnd_toEndOf="parent"
             app:layout_constraintStart_toStartOf="@+id/text_input_layout_buscar"
-            app:layout_constraintEnd_toEndOf="parent"> <com.google.android.material.chip.Chip
-            android:id="@+id/chip_catastros"
-            style="@style/Widget.Material3.Chip.Filter"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Catastros"
-            android:checked="true" />
+            app:layout_constraintTop_toBottomOf="@+id/text_input_layout_buscar">
+
+            <com.google.android.material.chip.Chip
+                android:id="@+id/chip_catastros"
+                style="@style/Widget.Material3.Chip.Filter"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:checked="true"
+                android:text="Catastros" />
 
             <com.google.android.material.chip.Chip
                 android:id="@+id/chip_mantenimientos"
@@ -85,7 +90,7 @@
             android:id="@+id/recycler_view_inventario"
             android:layout_width="0dp"
             android:layout_height="0dp"
-            android:layout_marginTop="@dimen/margin_small"
+            android:layout_marginTop="8dp"
             app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent"
@@ -111,12 +116,13 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:gravity="center"
-        android:padding="@dimen/margin_standard"
-        android:textAppearance="@style/TextAppearance.MaterialComponents.Body1"
+        android:padding="32dp"
+        android:textAppearance="@style/TextAppearance.Material3.BodyMedium"
         android:visibility="gone"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        tools:text="No hay reportes en el inventario." />
+        tools:text="No hay registros en el inventario." />
+
 </androidx.constraintlayout.widget.ConstraintLayout>

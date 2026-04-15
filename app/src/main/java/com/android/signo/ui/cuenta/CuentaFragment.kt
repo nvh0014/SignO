@@ -95,9 +95,10 @@ class CuentaFragment : Fragment() {
             .whereEqualTo("password", groupPass)
             .get()
             .addOnSuccessListener { documents ->
+                val currentBinding = _binding ?: return@addOnSuccessListener
                 if (documents.isEmpty) {
                     Toast.makeText(context, "Grupo no encontrado o contraseña incorrecta", Toast.LENGTH_SHORT).show()
-                    binding.progressBar.visibility = View.GONE
+                    currentBinding.progressBar.visibility = View.GONE
                 } else {
                     val groupId = documents.documents[0].id
                     val user = auth.currentUser
@@ -105,10 +106,12 @@ class CuentaFragment : Fragment() {
                         db.collection("users").document(user.uid)
                             .update("id_grupo", groupId, "rol", "usuario")
                             .addOnSuccessListener {
+                                if (_binding == null) return@addOnSuccessListener
                                 Toast.makeText(context, "Te has unido al grupo exitosamente", Toast.LENGTH_SHORT).show()
                                 loadUserData() // Recargar datos
                             }
                             .addOnFailureListener { e ->
+                                if (_binding == null) return@addOnFailureListener
                                 Toast.makeText(context, "Error al unirse al grupo: ${e.message}", Toast.LENGTH_SHORT).show()
                                 binding.progressBar.visibility = View.GONE
                             }
@@ -116,8 +119,8 @@ class CuentaFragment : Fragment() {
                 }
             }
             .addOnFailureListener { exception ->
-                binding.progressBar.visibility = View.GONE
-                Toast.makeText(context, "Error al buscar grupo: ${exception.message}", Toast.LENGTH_SHORT).show()
+                _binding?.progressBar?.visibility = View.GONE
+                if (isAdded) Toast.makeText(context, "Error al buscar grupo: ${exception.message}", Toast.LENGTH_SHORT).show()
             }
     }
 
@@ -133,10 +136,11 @@ class CuentaFragment : Fragment() {
         binding.progressBar.visibility = View.VISIBLE
         db.collection("users").document(user.uid).get()
             .addOnSuccessListener { document ->
-                binding.progressBar.visibility = View.GONE
+                val currentBinding = _binding ?: return@addOnSuccessListener
+                currentBinding.progressBar.visibility = View.GONE
                 if (document != null && document.exists()) {
-                    binding.tvUserName.text = document.getString("name")
-                    binding.tvUserEmail.text = document.getString("email")
+                    currentBinding.tvUserName.text = document.getString("name")
+                    currentBinding.tvUserEmail.text = document.getString("email")
                     
                     this.currentGroupId = document.getString("id_grupo")
                     val userRole = document.getString("rol")
@@ -147,57 +151,62 @@ class CuentaFragment : Fragment() {
                         fetchGroupInfo(currentGroupId!!, userRole)
                     }
                 } else {
-                    Toast.makeText(context, "No se encontraron datos del usuario.", Toast.LENGTH_SHORT).show()
+                    if (isAdded) Toast.makeText(context, "No se encontraron datos del usuario.", Toast.LENGTH_SHORT).show()
                 }
             }
             .addOnFailureListener { exception ->
-                binding.progressBar.visibility = View.GONE
-                Toast.makeText(context, "Error al cargar datos: ${exception.message}", Toast.LENGTH_SHORT).show()
+                _binding?.progressBar?.visibility = View.GONE
+                if (isAdded) Toast.makeText(context, "Error al cargar datos: ${exception.message}", Toast.LENGTH_SHORT).show()
             }
     }
 
     private fun showNoGroupUI() {
-        binding.tvGroupStatus.visibility = View.VISIBLE
-        binding.tvGroupName.visibility = View.GONE
-        binding.tvGroupId.visibility = View.GONE
-        binding.btnAdminGroup.visibility = View.GONE
-        binding.btnCreateGroup.visibility = View.VISIBLE
-        binding.btnJoinGroup.visibility = View.VISIBLE
+        _binding?.apply {
+            tvGroupStatus.visibility = View.VISIBLE
+            tvGroupName.visibility = View.GONE
+            tvGroupId.visibility = View.GONE
+            btnAdminGroup.visibility = View.GONE
+            btnCreateGroup.visibility = View.VISIBLE
+            btnJoinGroup.visibility = View.VISIBLE
+        }
     }
 
     private fun fetchGroupInfo(groupId: String, userRole: String?) {
         binding.progressBar.visibility = View.VISIBLE
         db.collection("groups").document(groupId).get()
             .addOnSuccessListener { groupDoc ->
-                binding.progressBar.visibility = View.GONE
+                val currentBinding = _binding ?: return@addOnSuccessListener
+                currentBinding.progressBar.visibility = View.GONE
                 if (groupDoc != null && groupDoc.exists()) {
                     val groupName = groupDoc.getString("name")
                     showGroupInfoUI(groupName, groupId, userRole)
                 } else {
                     showNoGroupUI()
-                    Toast.makeText(context, "Error: No se encontró el grupo al que perteneces.", Toast.LENGTH_LONG).show()
+                    if (isAdded) Toast.makeText(context, "Error: No se encontró el grupo al que perteneces.", Toast.LENGTH_LONG).show()
                 }
             }
             .addOnFailureListener { e ->
-                binding.progressBar.visibility = View.GONE
-                Toast.makeText(context, "Error al cargar datos del grupo: ${e.message}", Toast.LENGTH_LONG).show()
+                _binding?.progressBar?.visibility = View.GONE
+                if (isAdded) Toast.makeText(context, "Error al cargar datos del grupo: ${e.message}", Toast.LENGTH_LONG).show()
             }
     }
     
     private fun showGroupInfoUI(groupName: String?, groupId: String, userRole: String?) {
-        binding.tvGroupStatus.visibility = View.GONE
-        binding.btnCreateGroup.visibility = View.GONE
-        binding.btnJoinGroup.visibility = View.GONE
+        _binding?.apply {
+            tvGroupStatus.visibility = View.GONE
+            btnCreateGroup.visibility = View.GONE
+            btnJoinGroup.visibility = View.GONE
 
-        binding.tvGroupName.text = groupName ?: "Grupo sin nombre"
-        binding.tvGroupId.text = "ID: $groupId"
-        binding.tvGroupName.visibility = View.VISIBLE
-        binding.tvGroupId.visibility = View.VISIBLE
+            tvGroupName.text = groupName ?: "Grupo sin nombre"
+            tvGroupId.text = "ID: $groupId"
+            tvGroupName.visibility = View.VISIBLE
+            tvGroupId.visibility = View.VISIBLE
 
-        if (userRole == "admin") {
-            binding.btnAdminGroup.visibility = View.VISIBLE
-        } else {
-            binding.btnAdminGroup.visibility = View.GONE
+            if (userRole == "admin") {
+                btnAdminGroup.visibility = View.VISIBLE
+            } else {
+                btnAdminGroup.visibility = View.GONE
+            }
         }
     }
 

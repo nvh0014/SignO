@@ -26,10 +26,6 @@ import com.android.signo.utils.isNetworkAvailable
 
 enum class InventoryType { CATASTROS, MANTENIMIENTOS }
 
-/**
- * Fragmento que muestra una lista paginada de "Catastros" o "Mantenimientos".
- * Implementa paginación para manejar grandes volúmenes de datos de forma eficiente.
- */
 class InventarioFragment : Fragment() {
 
     private var _binding: FragmentInventarioBinding? = null
@@ -42,11 +38,11 @@ class InventarioFragment : Fragment() {
     private lateinit var inventarioAdapter: InventarioAdapter
     private var currentInventoryType = InventoryType.CATASTROS
 
-    // --- Variables para la Paginación ---
-    private val BATCH_SIZE = 50L // Tamaño del lote a cargar
-    private var lastVisible: DocumentSnapshot? = null // Último documento visible en la consulta anterior
-    private var isLoading = false // Flag para evitar cargas múltiples simultáneas
-    private var isDataEnd = false // Flag para indicar que se han cargado todos los datos
+    // Paginación
+    private val BATCH_SIZE = 50L
+    private var lastVisible: DocumentSnapshot? = null
+    private var isLoading = false
+    private var isDataEnd = false
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -68,36 +64,113 @@ class InventarioFragment : Fragment() {
 
     private fun setupSearchButton() {
         binding.buttonBuscar.setOnClickListener {
-            val query = binding.editTextBuscar.text.toString().trim()
+            val rawQuery = binding.editTextBuscar.text.toString().trim()
 
-            // --- NUEVO: VALIDAR CONEXIÓN PARA BÚSQUEDA ---
-            if (query.isNotEmpty() && !isNetworkAvailable(requireContext())) {
-                Toast.makeText(requireContext(), "Necesitas internet para buscar por ID específico.", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
-            // ---------------------------------------------
-
-            if (query.isNotEmpty()) {
-                searchInventoryById(query)
-            } else {
+            if (rawQuery.isEmpty()) {
                 resetPagination()
                 loadInventory(true)
+                return@setOnClickListener
+            }
+
+            if (!isNetworkAvailable(requireContext())) {
+                Toast.makeText(requireContext(), "Requiere internet para buscar.", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            // Lógica Sencilla:
+            // 1. Si son solo números -> Buscamos ID exacto.
+            // 2. Si hay letras -> Buscamos por Calle (o Nombre en Mantenimiento).
+            if (rawQuery.all { it.isDigit() }) {
+                searchInventoryById(rawQuery)
+            } else {
+                searchByText(rawQuery)
             }
         }
     }
 
-    /**
-     * Configura el RecyclerView, su LayoutManager y el listener de scroll para la paginación.
-     */
+    // Búsqueda simple y directa por los campos originales
+    private fun searchByText(textQuery: String) {
+        if (currentGroupId == null) return
+
+        val collectionPath = if (currentInventoryType == InventoryType.CATASTROS) "catastros" else "mantenimientos"
+
+        // VOLVEMOS A LO BÁSICO: Buscar en los campos que SÍ existen.
+        val fieldToSearch = if (currentInventoryType == InventoryType.CATASTROS) "callePrincipal" else "nombreSenal"
+
+        // Solo convertimos a mayúsculas para coincidir con tus datos (que suelen estar en mayúsculas)
+        val queryUpperCase = textQuery.uppercase()
+
+        binding.progressBar.visibility = View.VISIBLE
+        binding.tvStatusMessage.visibility = View.GONE
+
+        db.collection(collectionPath)
+            .whereEqualTo("groupId", currentGroupId)
+            .whereGreaterThanOrEqualTo(fieldToSearch, queryUpperCase)
+            .whereLessThanOrEqualTo(fieldToSearch, queryUpperCase + "\uf8ff")
+            .limit(30)
+            .get()
+            .addOnSuccessListener { documents ->
+                val currentBinding = _binding ?: return@addOnSuccessListener
+                currentBinding.progressBar.visibility = View.GONE
+
+                val items = documents.mapNotNull { doc ->
+                    val item = if (currentInventoryType == InventoryType.CATASTROS)
+                        doc.toObject(Catastro::class.java) else doc.toObject(Mantenimiento::class.java)
+                    item?.let { Pair(doc.id, it) }
+                }
+
+                inventarioAdapter.setData(items)
+                isDataEnd = true
+
+                if (items.isEmpty()) {
+                    showStatusMessage("No se encontraron resultados para '$textQuery'.")
+                }
+            }
+            .addOnFailureListener { e ->
+                if (_binding == null) return@addOnFailureListener
+                showError("Error: ${e.message}")
+            }
+    }
+
+    private fun searchInventoryById(id: String) {
+        if (currentGroupId == null) return
+        val collectionPath = if (currentInventoryType == InventoryType.CATASTROS) "catastros" else "mantenimientos"
+        val docId = if (currentInventoryType == InventoryType.CATASTROS) "CAT_$id" else id
+
+        binding.progressBar.visibility = View.VISIBLE
+        db.collection(collectionPath).document(docId).get()
+            .addOnSuccessListener { document ->
+                val currentBinding = _binding ?: return@addOnSuccessListener
+                currentBinding.progressBar.visibility = View.GONE
+                if (document.exists() && document.getString("groupId") == currentGroupId) {
+                    val item = if (currentInventoryType == InventoryType.CATASTROS)
+                        document.toObject(Catastro::class.java) else document.toObject(Mantenimiento::class.java)
+
+                    item?.let {
+                        inventarioAdapter.setData(listOf(Pair(document.id, it)))
+                        isDataEnd = true
+                        currentBinding.tvStatusMessage.visibility = View.GONE
+                    }
+                } else {
+                    inventarioAdapter.setData(emptyList())
+                    showStatusMessage("ID '$id' no encontrado.")
+                }
+            }
+            .addOnFailureListener {
+                if (_binding == null) return@addOnFailureListener
+                showError("Error al buscar ID.")
+            }
+    }
+
+    // --- CONFIGURACIÓN ESTÁNDAR (PAGINACIÓN Y LISTA) ---
+
     private fun setupRecyclerView() {
-        // El adaptador ahora se inicializa con una lista mutable.
         inventarioAdapter = InventarioAdapter(mutableListOf(), true) { itemId, item, action ->
             handleItemAction(itemId, item, action)
         }
         binding.recyclerViewInventario.adapter = inventarioAdapter
         binding.recyclerViewInventario.layoutManager = LinearLayoutManager(requireContext())
 
-        // --- Listener de Scroll para Paginación ---
         binding.recyclerViewInventario.addOnScrollListener(object : RecyclerView.OnScrollListener() {
             override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
                 super.onScrolled(recyclerView, dx, dy)
@@ -105,24 +178,64 @@ class InventarioFragment : Fragment() {
                 val totalItemCount = layoutManager.itemCount
                 val lastVisibleItemPosition = layoutManager.findLastVisibleItemPosition()
 
-                // Si no estamos cargando, no hemos llegado al final de los datos
-                // y estamos cerca del final de la lista, cargamos la siguiente página.
                 if (!isLoading && !isDataEnd && lastVisibleItemPosition + 5 >= totalItemCount) {
-                    loadInventory(false) // Cargar la siguiente página, no la primera.
+                    loadInventory(false)
                 }
             }
         })
     }
 
-    /**
-     * Resetea el estado de la paginación a sus valores iniciales.
-     * Esencial al cambiar de tipo de inventario o al refrescar la lista.
-     */
+    private fun loadInventory(isInitialLoad: Boolean) {
+        if (currentGroupId == null || isLoading || isDataEnd) return
+
+        isLoading = true
+        binding.progressBar.visibility = View.VISIBLE
+        binding.tvStatusMessage.visibility = View.GONE
+        val collectionPath = if (currentInventoryType == InventoryType.CATASTROS) "catastros" else "mantenimientos"
+
+        var query = db.collection(collectionPath)
+            .whereEqualTo("groupId", currentGroupId)
+            .orderBy("timestamp", Query.Direction.DESCENDING)
+            .limit(BATCH_SIZE)
+
+        if (!isInitialLoad && lastVisible != null) {
+            query = query.startAfter(lastVisible!!)
+        }
+
+        query.get().addOnSuccessListener { documents ->
+            val currentBinding = _binding ?: return@addOnSuccessListener
+            currentBinding.progressBar.visibility = View.GONE
+            isLoading = false
+
+            if (documents.isEmpty) {
+                isDataEnd = true
+                if (isInitialLoad) showStatusMessage("No hay registros aún.")
+                return@addOnSuccessListener
+            }
+
+            lastVisible = documents.documents.lastOrNull()
+            if (documents.size() < BATCH_SIZE) isDataEnd = true
+
+            val itemsWithIds = documents.mapNotNull { doc ->
+                val item = if (currentInventoryType == InventoryType.CATASTROS)
+                    doc.toObject(Catastro::class.java) else doc.toObject(Mantenimiento::class.java)
+                item?.let { Pair(doc.id, it) }
+            }
+
+            if (isInitialLoad) inventarioAdapter.setData(itemsWithIds)
+            else inventarioAdapter.addData(itemsWithIds)
+        }.addOnFailureListener { e ->
+            isLoading = false
+            if (_binding == null) return@addOnFailureListener
+            showError("Error de carga: ${e.message}")
+        }
+    }
+
     private fun resetPagination() {
         lastVisible = null
         isLoading = false
         isDataEnd = false
-        inventarioAdapter.setData(emptyList()) // Limpia el adaptador.
+        inventarioAdapter.setData(emptyList())
     }
 
     private fun setupChipGroupListener() {
@@ -131,7 +244,6 @@ class InventarioFragment : Fragment() {
                 R.id.chip_mantenimientos -> InventoryType.MANTENIMIENTOS
                 else -> InventoryType.CATASTROS
             }
-            // Al cambiar de tipo, reseteamos la paginación y cargamos desde el principio.
             resetPagination()
             loadInventory(true)
         }
@@ -139,210 +251,79 @@ class InventarioFragment : Fragment() {
 
     private fun checkUserGroupAndLoadInventory() {
         val user = auth.currentUser ?: return
-        binding.progressBar.visibility = View.VISIBLE
-
         db.collection("users").document(user.uid).get().addOnSuccessListener { document ->
+            if (_binding == null) return@addOnSuccessListener
             currentGroupId = document.getString("id_grupo")
-            if (currentGroupId.isNullOrEmpty()) {
-                showError("No perteneces a ningún grupo.")
-            } else {
+            if (currentGroupId.isNullOrEmpty()) showError("No perteneces a ningún grupo.")
+            else {
                 binding.inventoryContent.visibility = View.VISIBLE
-                loadInventory(true) // Carga la primera página.
+                loadInventory(true)
             }
-        }.addOnFailureListener { showError("Error al cargar datos.") }
-    }
-
-    /**
-     * Carga datos de forma paginada desde Firestore.
-     * @param isInitialLoad Boolean que indica si es la carga inicial (primera página).
-     */
-    private fun loadInventory(isInitialLoad: Boolean) {
-        if (currentGroupId == null || isLoading || isDataEnd) return // Previene cargas innecesarias.
-
-        isLoading = true // Marcamos que una carga ha comenzado.
-        binding.progressBar.visibility = View.VISIBLE
-        binding.tvStatusMessage.visibility = View.GONE
-        binding.recyclerViewInventario.visibility = View.VISIBLE // Asegura que la lista sea visible
-
-        val collectionPath = if (currentInventoryType == InventoryType.CATASTROS) "catastros" else "mantenimientos"
-
-        // --- Construcción de la Consulta Paginada ---
-        var query = db.collection(collectionPath)
-            .whereEqualTo("groupId", currentGroupId)
-            // Ordenamos por 'timestamp' de forma descendente para mostrar los más recientes primero.
-            .orderBy("timestamp", Query.Direction.DESCENDING)
-            .limit(BATCH_SIZE)
-
-        // Si NO es la carga inicial, empezamos la consulta después del último documento visible.
-        if (!isInitialLoad && lastVisible != null) {
-            query = query.startAfter(lastVisible!!)
+        }.addOnFailureListener {
+            if (_binding == null) return@addOnFailureListener
+            showError("Error al verificar usuario.")
         }
-
-        query.get()
-            .addOnSuccessListener { documents ->
-                binding.progressBar.visibility = View.GONE
-                isLoading = false // La carga ha terminado.
-
-                if (documents.isEmpty) {
-                    isDataEnd = true // No hay más documentos, hemos llegado al final.
-                    if (isInitialLoad) { // Si es la primera carga y no hay datos, mostramos un mensaje.
-                        showStatusMessage("No hay ${if (currentInventoryType == InventoryType.CATASTROS) "catastros" else "mantenimientos"} aún.")
-                    }
-                    return@addOnSuccessListener
-                }
-
-                // Guardamos el último documento de este lote para la siguiente consulta.
-                lastVisible = documents.documents.lastOrNull()
-                // Si el número de documentos es menor que el tamaño del lote, significa que hemos llegado al final.
-                if (documents.size() < BATCH_SIZE) {
-                    isDataEnd = true
-                }
-
-                // Mapeamos los documentos a nuestros objetos de datos.
-                val itemsWithIds = documents.mapNotNull { doc ->
-                    val item = try {
-                        if (currentInventoryType == InventoryType.CATASTROS) doc.toObject(Catastro::class.java)
-                        else doc.toObject(Mantenimiento::class.java)
-                    } catch (e: Exception) { null }
-                    item?.let { Pair(doc.id, it) }
-                }
-
-                // Si es la carga inicial, usamos setData. Si no, usamos addData para paginar.
-                if (isInitialLoad) {
-                    inventarioAdapter.setData(itemsWithIds)
-                } else {
-                    inventarioAdapter.addData(itemsWithIds)
-                }
-            }
-            .addOnFailureListener { e ->
-                isLoading = false
-                showError("Error al cargar el inventario: ${e.message}")
-            }
-    }
-
-    private fun searchInventoryById(id: String) {
-        if (currentGroupId == null) return
-
-        val collectionPath = if (currentInventoryType == InventoryType.CATASTROS) "catastros" else "mantenimientos"
-
-        // Asegúrate de mantener el prefijo si lo usas, si no, usa solo 'id'
-        val docId = if (currentInventoryType == InventoryType.CATASTROS) "CAT_$id" else id
-
-        db.collection(collectionPath).document(docId)
-            .get()
-            .addOnSuccessListener { document ->
-                if (document.exists() && document.getString("groupId") == currentGroupId) {
-                    val item = if (currentInventoryType == InventoryType.CATASTROS) {
-                        document.toObject(Catastro::class.java)
-                    } else {
-                        document.toObject(Mantenimiento::class.java)
-                    }
-
-                    if (item != null) {
-                        inventarioAdapter.setData(listOf(Pair(document.id, item)))
-                        isDataEnd = true
-                        binding.tvStatusMessage.visibility = View.GONE // Ocultar mensaje si hay éxito
-                    } else {
-                        showStatusMessage("Error al procesar el registro.")
-                    }
-                } else {
-                    // Si existe pero es de otro grupo, o si el ID coincide pero no hay datos
-                    inventarioAdapter.setData(emptyList())
-                    showStatusMessage("No se encontró un registro con ese ID.")
-                }
-            }
-            .addOnFailureListener { e ->
-                // AQUÍ ESTÁ LA SOLUCIÓN:
-                // Si el error es de PERMISOS, asumimos que es porque el documento no existe
-                // y por tanto la regla de seguridad falló al intentar leerlo.
-                if (e.message?.contains("PERMISSION_DENIED") == true) {
-                    inventarioAdapter.setData(emptyList())
-                    showStatusMessage("No se encontró un registro con ese ID.")
-                } else {
-                    showError("Error al buscar: ${e.message}")
-                }
-            }
     }
 
     private fun handleItemAction(itemId: String, item: Any, action: InventarioAction) {
-        // --- NUEVO: VERIFICACIÓN DE CONEXIÓN ---
+        if (!isAdded || context == null) return
         if (!isNetworkAvailable(requireContext())) {
-            Toast.makeText(requireContext(), "Modo Offline: No puedes editar ni eliminar sin internet.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(requireContext(), "Modo Offline: Funciones limitadas.", Toast.LENGTH_SHORT).show()
             return
         }
-        // ---------------------------------------
 
         when (action) {
             InventarioAction.EDIT -> {
-                when (item) {
-                    is Catastro -> {
-                        val intent = Intent(requireContext(), CrearActivity::class.java)
-                        intent.putExtra(CrearActivity.EDIT_CATASTRO_ID, itemId)
-                        startActivity(intent)
-                    }
-                    is Mantenimiento -> {
-                        val intent = Intent(requireContext(), MantenimientoActivity::class.java)
-                        intent.putExtra(MantenimientoActivity.EDIT_MANTENIMIENTO_ID, itemId)
-                        startActivity(intent)
-                    }
-                }
+                val intent = if (item is Catastro) Intent(requireContext(), CrearActivity::class.java)
+                else Intent(requireContext(), MantenimientoActivity::class.java)
+
+                val extraKey = if (item is Catastro) CrearActivity.EDIT_CATASTRO_ID else MantenimientoActivity.EDIT_MANTENIMIENTO_ID
+                intent.putExtra(extraKey, itemId)
+                startActivity(intent)
             }
             InventarioAction.DELETE -> showDeleteConfirmationDialog(itemId)
         }
     }
 
     private fun showDeleteConfirmationDialog(itemId: String) {
+        if (!isAdded || context == null) return
         AlertDialog.Builder(requireContext())
             .setTitle("Confirmar Eliminación")
-            .setMessage("¿Estás seguro de que deseas eliminar este elemento?")
+            .setMessage("¿Estás seguro de eliminar este registro?")
             .setPositiveButton("Eliminar") { _, _ -> deleteItem(itemId) }
-            .setNegativeButton("Cancelar", null)
-            .show()
+            .setNegativeButton("Cancelar", null).show()
     }
 
     private fun deleteItem(itemId: String) {
-        val collectionPath = if (currentInventoryType == InventoryType.CATASTROS) "catastros" else "mantenimientos"
-        db.collection(collectionPath).document(itemId)
-            .delete()
-            .addOnSuccessListener {
-                Toast.makeText(requireContext(), "Elemento eliminado", Toast.LENGTH_SHORT).show()
-                // Después de eliminar, refrescamos la lista desde el principio.
-                resetPagination()
-                loadInventory(true)
-            }
-            .addOnFailureListener { e ->
-                Toast.makeText(requireContext(), "Error al eliminar: ${e.message}", Toast.LENGTH_SHORT).show()
-            }
+        val path = if (currentInventoryType == InventoryType.CATASTROS) "catastros" else "mantenimientos"
+        db.collection(path).document(itemId).delete().addOnSuccessListener {
+            if (_binding == null) return@addOnSuccessListener
+            if (isAdded) Toast.makeText(requireContext(), "Eliminado correctamente", Toast.LENGTH_SHORT).show()
+            resetPagination()
+            loadInventory(true)
+        }
     }
 
     private fun showStatusMessage(message: String) {
-        binding.progressBar.visibility = View.GONE
-        binding.recyclerViewInventario.visibility = if(message.startsWith("No hay")) View.GONE else View.VISIBLE
-        binding.tvStatusMessage.text = message
-        binding.tvStatusMessage.visibility = View.VISIBLE
+        _binding?.let {
+            it.progressBar.visibility = View.GONE
+            it.tvStatusMessage.text = message
+            it.tvStatusMessage.visibility = View.VISIBLE
+        }
     }
 
     private fun showError(message: String) {
-        binding.progressBar.visibility = View.GONE
-        binding.inventoryContent.visibility = View.GONE
-        binding.tvStatusMessage.text = message
-        binding.tvStatusMessage.visibility = View.VISIBLE
+        _binding?.let {
+            it.progressBar.visibility = View.GONE
+            it.inventoryContent.visibility = if(message.contains("grupo")) View.GONE else View.VISIBLE
+            it.tvStatusMessage.text = message
+            it.tvStatusMessage.visibility = View.VISIBLE
+        }
     }
 
-    /**
-     * Al volver a la pantalla, reseteamos y recargamos para asegurar que los datos estén actualizados.
-     * Esto es útil si el usuario editó un item y volvió.
-     */
     override fun onResume() {
         super.onResume()
-
-        // Verificamos conexión al entrar
-        if (!isNetworkAvailable(requireContext())) {
-            Toast.makeText(requireContext(), "Sin conexión: Mostrando datos guardados.", Toast.LENGTH_LONG).show()
-        }
-
-        if (currentGroupId != null) {
-            // Firestore es inteligente: si no hay red, loadInventory cargará desde la caché automáticamente
+        if (currentGroupId != null && _binding != null) {
             resetPagination()
             loadInventory(true)
         }

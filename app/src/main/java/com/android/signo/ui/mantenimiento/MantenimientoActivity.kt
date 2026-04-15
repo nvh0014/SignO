@@ -1,27 +1,28 @@
 package com.android.signo.ui.mantenimiento
 
+import android.content.Context
 import android.os.Bundle
-import android.widget.Button
-import android.widget.CheckBox
-import android.widget.EditText
-import android.widget.RadioButton
-import android.widget.RadioGroup
-import android.widget.Toast
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
+import android.widget.*
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import com.android.signo.R
 import com.android.signo.ui.crear.Catastro
-import com.android.signo.utils.isNetworkAvailable // Importamos tu utilidad
+import com.android.signo.utils.isNetworkAvailable
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.textfield.TextInputEditText
-import com.google.android.material.textfield.TextInputLayout // IMPORTANTE: Soluciona el error Unresolved reference
+import com.google.android.material.textfield.TextInputLayout
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ServerTimestamp
 import java.util.Date
 
-/**
- * Data class para el registro de Mantenimiento.
- */
+// --- CLASES DE DATOS (IMPORTANTE: NO BORRAR ESTAS LÍNEAS) ---
+
+// 1. Estructura de Mantenimiento (Soluciona los errores rojos)
 data class Mantenimiento(
     val catastroId: String = "",
     val nombreSenal: String = "",
@@ -34,16 +35,26 @@ data class Mantenimiento(
     @ServerTimestamp val timestamp: Date? = null
 )
 
+// 2. Estructura para los resultados del buscador visual
+data class SearchResult(
+    val id: String,
+    val nombre: String,
+    val calle: String,
+    val interseccion: String,
+    val numeracion: String
+)
+
 class MantenimientoActivity : AppCompatActivity() {
 
     // --- VISTAS ---
-    // Usamos TextInputLayout para controlar visualmente si está habilitado o no
+    private lateinit var editTextBuscarCalle: TextInputEditText
+    private lateinit var buttonBuscarCalle: Button
+    private lateinit var editTextBuscarId: TextInputEditText
+    private lateinit var buttonCargarId: Button
+
     private lateinit var layoutNombreSenal: TextInputLayout
     private lateinit var layoutCallePrincipal: TextInputLayout
-
     private lateinit var toolbar: MaterialToolbar
-    private lateinit var editTextBuscarSenal: TextInputEditText
-    private lateinit var buttonBuscarSenal: Button
     private lateinit var editTextNombreSenal: TextInputEditText
     private lateinit var editTextCallePrincipal: TextInputEditText
     private lateinit var radioGroupEstado: RadioGroup
@@ -53,7 +64,7 @@ class MantenimientoActivity : AppCompatActivity() {
     private lateinit var editTextObservacion: EditText
     private lateinit var buttonGuardar: Button
 
-    // --- FIREBASE Y DATOS ---
+    // --- FIREBASE ---
     private lateinit var auth: FirebaseAuth
     private lateinit var db: FirebaseFirestore
     private var currentGroupId: String? = null
@@ -78,41 +89,29 @@ class MantenimientoActivity : AppCompatActivity() {
     }
 
     private fun checkUserAndInitialize() {
-        val user = auth.currentUser
-        if (user == null) {
-            Toast.makeText(this, "Usuario no autenticado", Toast.LENGTH_SHORT).show()
-            finish()
-            return
-        }
-
+        val user = auth.currentUser ?: return
         db.collection("users").document(user.uid).get().addOnSuccessListener { document ->
             currentGroupId = document.getString("id_grupo")
             currentUserName = document.getString("name")
-            if (!currentGroupId.isNullOrEmpty()) {
-                initializeUI()
-            } else {
-                Toast.makeText(this, "Debes unirte a un grupo para registrar mantenimientos.", Toast.LENGTH_LONG).show()
-                finish()
-            }
-        }.addOnFailureListener {
-            Toast.makeText(this, "Error al verificar usuario.", Toast.LENGTH_SHORT).show()
-            finish()
-        }
+            if (!currentGroupId.isNullOrEmpty()) initializeUI() else finish()
+        }.addOnFailureListener { finish() }
     }
 
     private fun initializeUI() {
-        // CORRECCIÓN PRINCIPAL: Especificamos el tipo <TextInputLayout>
-        layoutNombreSenal = findViewById<TextInputLayout>(R.id.text_input_layout_nombre_senal)
-        layoutCallePrincipal = findViewById<TextInputLayout>(R.id.text_input_layout_calle_principal)
+        // Vinculación de Vistas
+        editTextBuscarCalle = findViewById(R.id.edit_text_buscar_calle)
+        buttonBuscarCalle = findViewById(R.id.button_buscar_calle)
+        editTextBuscarId = findViewById(R.id.edit_text_buscar_id)
+        buttonCargarId = findViewById(R.id.button_cargar_id)
+
+        layoutNombreSenal = findViewById(R.id.text_input_layout_nombre_senal)
+        layoutCallePrincipal = findViewById(R.id.text_input_layout_calle_principal)
 
         toolbar = findViewById(R.id.toolbar)
         setSupportActionBar(toolbar)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         toolbar.setNavigationOnClickListener { onBackPressedDispatcher.onBackPressed() }
 
-        // Referencias a vistas
-        editTextBuscarSenal = findViewById(R.id.edit_text_buscar_senal)
-        buttonBuscarSenal = findViewById(R.id.button_buscar_senal)
         editTextNombreSenal = findViewById(R.id.edit_text_nombre_senal)
         editTextCallePrincipal = findViewById(R.id.edit_text_calle_principal)
         radioGroupEstado = findViewById(R.id.radiogroup_estado)
@@ -122,198 +121,195 @@ class MantenimientoActivity : AppCompatActivity() {
         editTextObservacion = findViewById(R.id.edit_text_observacion)
         buttonGuardar = findViewById(R.id.button_guardar_mantenimiento)
 
+        // Si es edición, cargamos datos previos
         if (editMantenimientoId != null) {
             supportActionBar?.title = "Editar Mantenimiento"
             loadMantenimientoData(editMantenimientoId!!)
-        } else {
-            supportActionBar?.title = "Nuevo Mantenimiento"
         }
 
-        buttonBuscarSenal.setOnClickListener {
-            val numeroId = editTextBuscarSenal.text.toString().trim()
-            if (numeroId.isNotEmpty()) {
-                // Buscamos asumiendo prefijo CAT_
-                val catastroIdToSearch = "CAT_$numeroId"
-                searchAndLoadCatastroData(catastroIdToSearch)
+        // --- LISTENER 1: BUSCAR POR CALLE (SIMPLE) ---
+        buttonBuscarCalle.setOnClickListener {
+            val query = editTextBuscarCalle.text.toString().trim()
+            if (query.isNotEmpty()) {
+                searchByCalle(query)
             } else {
-                Toast.makeText(this, "Ingresa un número de ID.", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Escribe el nombre de una calle", Toast.LENGTH_SHORT).show()
             }
         }
 
-        buttonGuardar.setOnClickListener {
-            if (validarCampos()) {
-                saveMantenimientoData()
+        // --- LISTENER 2: CARGAR POR ID ---
+        buttonCargarId.setOnClickListener {
+            val idNum = editTextBuscarId.text.toString().trim()
+            if (idNum.isNotEmpty()) {
+                searchAndLoadCatastroData("CAT_$idNum")
+            } else {
+                Toast.makeText(this, "Escribe el número del ID", Toast.LENGTH_SHORT).show()
             }
         }
 
-        // Por defecto bloqueamos los campos manuales para obligar a usar el buscador
+        buttonGuardar.setOnClickListener { if (validarCampos()) saveMantenimientoData() }
         enableManualInput(false)
     }
 
-    private fun loadMantenimientoData(mantenimientoId: String) {
-        db.collection("mantenimientos").document(mantenimientoId).get()
-            .addOnSuccessListener { document ->
-                if (document.exists()) {
-                    val mantenimiento = document.toObject(Mantenimiento::class.java)
-                    mantenimiento?.let {
-                        // Intentamos cargar los datos del catastro asociado
-                        searchAndLoadCatastroData(it.catastroId)
-                        selectedCatastroId = it.catastroId
+    // --- LÓGICA DE BÚSQUEDA SIMPLE (SIN TILDES NI COSAS RARAS) ---
+    private fun searchByCalle(calleQuery: String) {
+        if (currentGroupId == null) return
 
-                        // Rellenamos el formulario de mantenimiento
-                        when (it.estado) {
-                            "Bueno" -> radioGroupEstado.check(R.id.radio_bueno)
-                            "Regular" -> radioGroupEstado.check(R.id.radio_regular)
-                            "Malo" -> radioGroupEstado.check(R.id.radio_malo)
-                        }
+        // Simplemente convertimos a mayúsculas para coincidir con tus datos
+        val queryUpper = calleQuery.uppercase()
 
-                        checkboxPodado.isChecked = it.trabajosRealizados.contains("Podado")
-                        checkboxPintado.isChecked = it.trabajosRealizados.contains("Pintado")
-                        checkboxLimpieza.isChecked = it.trabajosRealizados.contains("Limpieza")
-
-                        editTextObservacion.setText(it.observacion)
-                    }
-                } else {
-                    Toast.makeText(this, "No se encontró el mantenimiento.", Toast.LENGTH_LONG).show()
-                    finish()
+        db.collection("catastros")
+            .whereEqualTo("groupId", currentGroupId)
+            // BUSCAMOS EN EL CAMPO ORIGINAL: callePrincipal
+            .whereGreaterThanOrEqualTo("callePrincipal", queryUpper)
+            .whereLessThanOrEqualTo("callePrincipal", queryUpper + "\uf8ff")
+            .limit(15)
+            .get()
+            .addOnSuccessListener { documents ->
+                if (documents.isEmpty) {
+                    Toast.makeText(this, "No se encontraron resultados para: $calleQuery", Toast.LENGTH_SHORT).show()
+                    return@addOnSuccessListener
                 }
+
+                val results = documents.map { doc ->
+                    SearchResult(
+                        id = doc.id,
+                        nombre = doc.getString("nombreSenal") ?: "S/N",
+                        calle = doc.getString("callePrincipal") ?: "Sin Calle",
+                        interseccion = doc.getString("interseccion") ?: "",
+                        numeracion = doc.getString("numeracion") ?: ""
+                    )
+                }
+                showSelectionDialog(results)
             }
             .addOnFailureListener {
-                Toast.makeText(this, "Error al cargar datos.", Toast.LENGTH_SHORT).show()
-                finish()
+                Toast.makeText(this, "Error de búsqueda: ${it.message}", Toast.LENGTH_SHORT).show()
             }
     }
 
-    /**
-     * Busca un catastro. Si no hay red y no está en caché, permite ingreso manual.
-     */
-    private fun searchAndLoadCatastroData(catastroId: String) {
-        if (currentGroupId == null) return
+    private fun showSelectionDialog(results: List<SearchResult>) {
+        val adapter = SearchAdapter(this, results)
 
-        db.collection("catastros").document(catastroId)
-            .get()
-            .addOnSuccessListener { document ->
-                if (document.exists() && document.getString("groupId") == currentGroupId) {
-                    // CASO 1: ENCONTRADO (Online o Caché)
-                    val catastro = document.toObject(Catastro::class.java)
-                    catastro?.let {
-                        selectedCatastroId = document.id
-
-                        editTextNombreSenal.setText(it.nombreSenal?.toString() ?: "")
-                        editTextCallePrincipal.setText(it.callePrincipal?.toString() ?: "")
-
-                        // Bloqueamos edición manual porque ya tenemos los datos oficiales
-                        enableManualInput(false)
-
-                        Toast.makeText(this, "Señal cargada.", Toast.LENGTH_SHORT).show()
-                    }
-                } else {
-                    // CASO 2: NO ENCONTRADO EN BD
-                    handleNotFoundOrOffline(catastroId)
-                }
+        AlertDialog.Builder(this)
+            .setTitle("Seleccione la Señal")
+            .setAdapter(adapter) { _, which ->
+                val selectedItem = results[which]
+                // Llenamos el ID abajo para que el usuario vea qué eligió
+                editTextBuscarId.setText(selectedItem.id.replace("CAT_", ""))
+                searchAndLoadCatastroData(selectedItem.id)
             }
-            .addOnFailureListener {
-                // CASO 3: ERROR DE RED (Sin caché)
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    // --- ADAPTER INTERNO PARA EL DIÁLOGO ---
+    private class SearchAdapter(context: Context, private val items: List<SearchResult>)
+        : ArrayAdapter<SearchResult>(context, 0, items) {
+
+        override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+            // Intenta usar el layout bonito si existe, sino usa uno simple por defecto
+            val view = convertView ?: LayoutInflater.from(context).inflate(R.layout.item_search_result, parent, false)
+            val item = items[position]
+
+            val tvTitle = view.findViewById<TextView>(R.id.tv_search_title)
+            val tvSubtitle = view.findViewById<TextView>(R.id.tv_search_subtitle)
+            val tvDetails = view.findViewById<TextView>(R.id.tv_search_details)
+            val container = view.findViewById<View>(R.id.container_search_result)
+
+            if (tvTitle != null) {
+                tvTitle.text = item.nombre
+                tvSubtitle.text = item.calle
+                val interseccionStr = if(item.interseccion.isNotEmpty()) "Esq: ${item.interseccion}" else "S/I"
+                val numStr = if(item.numeracion.isNotEmpty()) " (#${item.numeracion})" else ""
+                tvDetails.text = "$interseccionStr$numStr | ID: ${item.id}"
+                container.setBackgroundColor(ContextCompat.getColor(context, R.color.color_catastro_background))
+            } else {
+                val tv = view.findViewById<TextView>(android.R.id.text1)
+                if(tv != null) tv.text = "${item.nombre} - ${item.calle}"
+            }
+
+            return view
+        }
+    }
+
+    private fun searchAndLoadCatastroData(catastroId: String) {
+        db.collection("catastros").document(catastroId).get().addOnSuccessListener { document ->
+            if (document.exists() && document.getString("groupId") == currentGroupId) {
+                val catastro = document.toObject(Catastro::class.java)
+                catastro?.let {
+                    selectedCatastroId = document.id
+                    editTextNombreSenal.setText(it.nombreSenal?.toString() ?: "")
+                    editTextCallePrincipal.setText(it.callePrincipal?.toString() ?: "")
+                    enableManualInput(false)
+                    Toast.makeText(this, "Señal cargada: ${it.nombreSenal}", Toast.LENGTH_SHORT).show()
+                }
+            } else {
                 handleNotFoundOrOffline(catastroId)
             }
+        }.addOnFailureListener { handleNotFoundOrOffline(catastroId) }
     }
 
     private fun handleNotFoundOrOffline(catastroId: String) {
         if (!isNetworkAvailable(this)) {
-            // MODO OFFLINE MANUAL
-            selectedCatastroId = catastroId // Confiamos en el ID ingresado
-
-            // Habilitamos campos para escritura manual
+            selectedCatastroId = catastroId
             enableManualInput(true)
-
-            // Limpiamos para que el usuario escriba
-            editTextNombreSenal.setText("")
-            editTextCallePrincipal.setText("")
-            editTextNombreSenal.requestFocus()
-
-            Toast.makeText(this, "Modo Offline: Ingresa los datos manualmente.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Modo Offline: Ingrese datos manualmente.", Toast.LENGTH_LONG).show()
         } else {
-            // MODO ONLINE: Si no existe, error normal.
-            selectedCatastroId = null
-            enableManualInput(false)
-            editTextNombreSenal.setText("")
-            editTextCallePrincipal.setText("")
-            Toast.makeText(this, "No se encontró esa señal en el sistema.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "ID no encontrado en el sistema.", Toast.LENGTH_SHORT).show()
         }
     }
 
     private fun enableManualInput(enable: Boolean) {
-        // Controlamos el contenedor completo para mejor feedback visual (Gris vs Blanco)
         layoutNombreSenal.isEnabled = enable
         layoutCallePrincipal.isEnabled = enable
     }
 
     private fun validarCampos(): Boolean {
-        if (selectedCatastroId == null) {
-            Toast.makeText(this, "Busca una señal o ingresa el ID en modo offline.", Toast.LENGTH_SHORT).show()
-            return false
-        }
-        if (radioGroupEstado.checkedRadioButtonId == -1) {
-            Toast.makeText(this, "Selecciona el estado.", Toast.LENGTH_SHORT).show()
-            return false
-        }
+        if (selectedCatastroId == null) return false
+        if (radioGroupEstado.checkedRadioButtonId == -1) return false
         return true
     }
 
     private fun saveMantenimientoData() {
-        val user = auth.currentUser
-        if (user == null || currentGroupId == null || selectedCatastroId == null) return
-
-        // Bloquear botón para evitar doble click
-        buttonGuardar.isEnabled = false
-        buttonGuardar.text = "Guardando..."
-
-        val estadoSeleccionado = findViewById<RadioButton>(radioGroupEstado.checkedRadioButtonId).text.toString()
-        val trabajosSeleccionados = mutableListOf<String>().apply {
+        val estado = findViewById<RadioButton>(radioGroupEstado.checkedRadioButtonId).text.toString()
+        val trabajos = mutableListOf<String>().apply {
             if (checkboxPodado.isChecked) add("Podado")
             if (checkboxPintado.isChecked) add("Pintado")
             if (checkboxLimpieza.isChecked) add("Limpieza")
         }
 
-        val mantenimiento = Mantenimiento(
+        val mant = Mantenimiento(
             catastroId = selectedCatastroId!!,
-            nombreSenal = editTextNombreSenal.text.toString().trim(),
-            estado = estadoSeleccionado,
-            trabajosRealizados = trabajosSeleccionados,
-            observacion = editTextObservacion.text.toString().trim(),
+            nombreSenal = editTextNombreSenal.text.toString(),
+            estado = estado,
+            trabajosRealizados = trabajos,
+            observacion = editTextObservacion.text.toString(),
             groupId = currentGroupId!!,
-            userUid = user.uid,
+            userUid = auth.currentUser!!.uid,
             userName = currentUserName ?: "Desconocido"
         )
 
-        val hayInternet = isNetworkAvailable(this)
+        db.collection("mantenimientos").add(mant).addOnSuccessListener {
+            Toast.makeText(this, "Guardado exitosamente", Toast.LENGTH_SHORT).show()
+            finish()
+        }
+    }
 
-        if (editMantenimientoId != null) {
-            // EDITAR
-            db.collection("mantenimientos").document(editMantenimientoId!!).set(mantenimiento)
-                .addOnSuccessListener {
-                    if (!hayInternet) Toast.makeText(this, "Guardado localmente. Se subirá al conectar.", Toast.LENGTH_LONG).show()
-                    else Toast.makeText(this, "Mantenimiento actualizado", Toast.LENGTH_SHORT).show()
-                    finish()
-                }
-                .addOnFailureListener {
-                    buttonGuardar.isEnabled = true
-                    buttonGuardar.text = "Guardar Mantenimiento"
-                    Toast.makeText(this, "Error: ${it.message}", Toast.LENGTH_SHORT).show()
-                }
-        } else {
-            // CREAR
-            db.collection("mantenimientos").add(mantenimiento)
-                .addOnSuccessListener {
-                    if (!hayInternet) Toast.makeText(this, "Guardado localmente. Se subirá al conectar.", Toast.LENGTH_LONG).show()
-                    else Toast.makeText(this, "Mantenimiento registrado", Toast.LENGTH_SHORT).show()
-                    finish()
-                }
-                .addOnFailureListener {
-                    buttonGuardar.isEnabled = true
-                    buttonGuardar.text = "Guardar Mantenimiento"
-                    Toast.makeText(this, "Error: ${it.message}", Toast.LENGTH_SHORT).show()
-                }
+    private fun loadMantenimientoData(id: String) {
+        db.collection("mantenimientos").document(id).get().addOnSuccessListener { doc ->
+            // AQUÍ ES DONDE ANTES FALLABA: Ahora 'Mantenimiento' ya existe
+            val m = doc.toObject(Mantenimiento::class.java) ?: return@addOnSuccessListener
+
+            searchAndLoadCatastroData(m.catastroId)
+            when (m.estado) {
+                "Bueno" -> radioGroupEstado.check(R.id.radio_bueno)
+                "Regular" -> radioGroupEstado.check(R.id.radio_regular)
+                "Malo" -> radioGroupEstado.check(R.id.radio_malo)
+            }
+            checkboxPodado.isChecked = m.trabajosRealizados.contains("Podado")
+            checkboxPintado.isChecked = m.trabajosRealizados.contains("Pintado")
+            checkboxLimpieza.isChecked = m.trabajosRealizados.contains("Limpieza")
+            editTextObservacion.setText(m.observacion)
         }
     }
 }

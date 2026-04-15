@@ -1,5 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Este es el nuevo layout para registrar un mantenimiento -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
@@ -30,24 +29,74 @@
             android:orientation="vertical"
             android:padding="16dp">
 
-            <!-- TÍTULO: Específico para Mantenimiento -->
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center_horizontal"
                 android:layout_marginBottom="24dp"
                 android:fontFamily="@font/inter_semibold"
-                android:text="Nuevo Mantenimiento de Señal"
+                android:text="Nuevo Mantenimiento"
                 android:textAppearance="@style/TextAppearance.Material3.HeadlineSmall" />
 
-            <!-- SECCIÓN DE BÚSQUEDA DEL CATASTRO -->
             <TextView
                 style="@style/TextAppearance.Material3.TitleMedium"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:fontFamily="@font/inter_semibold"
-                android:text="Buscar Señal en Catastro"
-                android:layout_marginBottom="8dp"/>
+                android:text="Buscar Señal a Mantener"
+                android:layout_marginBottom="16dp"/>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Opción A: Buscar por nombre de calle"
+                android:textSize="12sp"
+                android:fontFamily="@font/inter_medium"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                android:layout_marginBottom="4dp"/>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:layout_marginBottom="16dp">
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/text_input_layout_buscar_calle"
+                    style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:hint="Nombre calle (Ej: Arturo Prat)"
+                    app:endIconMode="clear_text">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/edit_text_buscar_calle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:fontFamily="@font/inter_medium"
+                        android:inputType="textCapCharacters"
+                        android:imeOptions="actionSearch"
+                        android:textSize="14sp" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <Button
+                    android:id="@+id/button_buscar_calle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:text="Buscar" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Opción B: Cargar por ID exacto"
+                android:textSize="12sp"
+                android:fontFamily="@font/inter_medium"
+                android:textColor="?attr/colorOnSurfaceVariant"
+                android:layout_marginBottom="4dp"/>
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -57,16 +106,16 @@
                 android:layout_marginBottom="24dp">
 
                 <com.google.android.material.textfield.TextInputLayout
-                    android:id="@+id/text_input_layout_buscar_senal"
+                    android:id="@+id/text_input_layout_buscar_id"
                     style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:hint="*ID del Catastro"
+                    android:hint="ID Numérico (Ej: 1005)"
                     app:prefixText="CAT_">
 
                     <com.google.android.material.textfield.TextInputEditText
-                        android:id="@+id/edit_text_buscar_senal"
+                        android:id="@+id/edit_text_buscar_id"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:fontFamily="@font/inter_medium"
@@ -75,18 +124,22 @@
                 </com.google.android.material.textfield.TextInputLayout>
 
                 <Button
-                    android:id="@+id/button_buscar_senal"
+                    android:id="@+id/button_cargar_id"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="8dp"
-                    android:text="Cargar" />
+                    android:text="Cargar"/>
             </LinearLayout>
 
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Datos de la Señal (Automático)"
+                android:textSize="12sp"
+                android:fontFamily="@font/inter_bold"
+                android:textColor="?attr/colorPrimary"
+                android:layout_marginBottom="8dp"/>
 
-            <!-- EL RESTO DE LOS CAMPOS ESTARÁN DESHABILITADOS Y SE AUTOCOMPLETARÁN -->
-            <!-- Los datos que se muestran aquí son del catastro seleccionado -->
-
-            <!-- SECCIÓN DE IDENTIFICACIÓN -->
             <com.google.android.material.textfield.TextInputLayout
                 android:id="@+id/text_input_layout_nombre_senal"
                 android:layout_width="match_parent"
@@ -97,10 +150,10 @@
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/edit_text_nombre_senal"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content" />
+                    android:layout_height="wrap_content"
+                    android:fontFamily="@font/inter_medium"/>
             </com.google.android.material.textfield.TextInputLayout>
 
-            <!-- SECCIÓN DE UBICACIÓN -->
             <com.google.android.material.textfield.TextInputLayout
                 android:id="@+id/text_input_layout_calle_principal"
                 android:layout_width="match_parent"
@@ -111,23 +164,23 @@
                 <com.google.android.material.textfield.TextInputEditText
                     android:id="@+id/edit_text_calle_principal"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"/>
+                    android:layout_height="wrap_content"
+                    android:fontFamily="@font/inter_medium"/>
             </com.google.android.material.textfield.TextInputLayout>
 
-            <!-- CAMPOS DE MANTENIMIENTO (ESTOS SÍ SON EDITABLES) -->
             <TextView
                 style="@style/TextAppearance.Material3.TitleMedium"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:fontFamily="@font/inter_semibold"
-                android:text="Registrar Mantenimiento"
+                android:text="Registrar Trabajo"
                 android:layout_marginTop="24dp"
                 android:layout_marginBottom="8dp"/>
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="*Estado de la Señal"
+                android:text="*Estado actual de la Señal"
                 android:fontFamily="@font/inter_medium"
                 android:textColor="?attr/colorOnSurfaceVariant"
                 android:layout_marginStart="4dp"
@@ -215,7 +268,6 @@
                     android:textSize="14sp" />
             </com.google.android.material.textfield.TextInputLayout>
 
-            <!-- BOTÓN: Actualizado para Mantenimiento -->
             <Button
                 android:id="@+id/button_guardar_mantenimiento"
                 android:layout_width="match_parent"

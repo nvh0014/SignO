@@ -1,0 +1,10 @@
+package com.android.signo.utils
+
+import java.text.Normalizer
+import java.util.regex.Pattern
+
+fun String.normalizarParaBusqueda(): String {
+    val nfdNormalizedString = Normalizer.normalize(this, Normalizer.Form.NFD)
+    val pattern = Pattern.compile("\\p{InCombiningDiacriticalMarks}+")
+    return pattern.matcher(nfdNormalizedString).replaceAll("").lowercase().trim()
+}

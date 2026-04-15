@@ -10,6 +10,7 @@ import android.widget.RadioGroup
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.android.signo.utils.isNetworkAvailable
+import com.android.signo.utils.normalizarParaBusqueda // <--- IMPORTANTE: Asegúrate de tener esto
 import com.android.signo.R
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.textfield.TextInputEditText
@@ -21,8 +22,8 @@ import com.google.firebase.firestore.ServerTimestamp
 import java.util.Date
 
 /**
- * Data class a prueba de balas para Catastro. Acepta cualquier tipo de dato
- * para evitar fallos de deserialización con datos antiguos e inconsistentes.
+ * Data class para Catastro.
+ * Se agrega calleNormalizada para permitir búsquedas precisas por calle.
  */
 data class Catastro(
     @DocumentId val id: String = "",
@@ -36,6 +37,7 @@ data class Catastro(
     val medida: Any? = null,
     val existencia: Any? = null,
     val estado: Any? = null,
+    val calleNormalizada: String? = null, // <--- CAMPO NUEVO PARA BÚSQUEDA
     val groupId: String? = "",
     val userUid: String? = "",
     val userName: String? = "",
@@ -91,7 +93,6 @@ class CrearActivity : AppCompatActivity() {
 
     /**
      * Verifica si el usuario está autenticado y tiene un grupo asignado.
-     * Si todo es correcto, inicializa la UI.
      */
     private fun checkUserAndInitialize() {
         val user = auth.currentUser
@@ -117,27 +118,18 @@ class CrearActivity : AppCompatActivity() {
                         initializeUI()
                     }
                 } else {
-                    Toast.makeText(
-                        this,
-                        "No se encontraron datos de tu usuario.",
-                        Toast.LENGTH_LONG
-                    ).show()
+                    Toast.makeText(this, "No se encontraron datos de tu usuario.", Toast.LENGTH_LONG).show()
                     finish()
                 }
             }
             .addOnFailureListener { exception ->
-                Toast.makeText(
-                    this,
-                    "Error al verificar tu estado: ${exception.message}",
-                    Toast.LENGTH_SHORT
-                ).show()
+                Toast.makeText(this, "Error al verificar tu estado: ${exception.message}", Toast.LENGTH_SHORT).show()
                 finish()
             }
     }
 
     /**
      * Inicializa todas las vistas de la UI y establece los listeners.
-     * Carga los datos si estamos en modo de edición.
      */
     private fun initializeUI() {
         toolbar = findViewById(R.id.toolbar)
@@ -185,9 +177,6 @@ class CrearActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * Carga los datos del catastro desde Firestore para rellenar el formulario.
-     */
     private fun loadCatastroForEditing() {
         editCatastroId?.let { id ->
             db.collection("catastros").document(id).get()
@@ -196,27 +185,16 @@ class CrearActivity : AppCompatActivity() {
                         val catastro = document.toObject(Catastro::class.java)
                         catastro?.let { populateUIWithCatastro(it) }
                     } else {
-                        Toast.makeText(
-                            this,
-                            "Error: No se encontró el catastro.",
-                            Toast.LENGTH_SHORT
-                        ).show()
+                        Toast.makeText(this, "Error: No se encontró el catastro.", Toast.LENGTH_SHORT).show()
                         finish()
                     }
                 }
                 .addOnFailureListener {
-                    Toast.makeText(
-                        this,
-                        "Error al cargar los datos del catastro.",
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    Toast.makeText(this, "Error al cargar los datos del catastro.", Toast.LENGTH_SHORT).show()
                 }
         }
     }
 
-    /**
-     * Rellena los campos de la UI con los datos de un objeto Catastro.
-     */
     private fun populateUIWithCatastro(catastro: Catastro) {
         editTextNombreSenal.setText(catastro.nombreSenal?.toString() ?: "")
         editTextLeyenda.setText(catastro.leyenda?.toString() ?: "")
@@ -242,10 +220,6 @@ class CrearActivity : AppCompatActivity() {
         }
     }
 
-
-    /**
-     * Valida que los campos obligatorios del catastro no estén vacíos.
-     */
     private fun validarCampos(): Boolean {
         var esValido = true
 
@@ -291,26 +265,33 @@ class CrearActivity : AppCompatActivity() {
 
     /**
      * Guarda o actualiza un catastro en Firestore.
+     * MODIFICADO: Ahora guarda 'calleNormalizada' para búsquedas.
      */
     private fun saveCatastroData() {
         val user = auth.currentUser
         if (user == null || currentGroupId == null) return
 
-        // 1. BLOQUEAR EL BOTÓN para evitar duplicados por doble click
         buttonGuardar.isEnabled = false
         buttonGuardar.text = "Guardando..."
 
-        // ... (Tu código de obtención de datos y RadioButtons sigue igual) ...
-        // Copia aquí tu parte de obtener idExistencia, idEstado, y crear el mapa catastroData...
         val idExistencia = radioGroupExistencia.checkedRadioButtonId
         val idEstado = radioGroupEstado.checkedRadioButtonId
         val existenciaSeleccionada = if (idExistencia != -1) findViewById<RadioButton>(idExistencia).text.toString() else ""
         val estadoSeleccionado = if (idEstado != -1) findViewById<RadioButton>(idEstado).text.toString() else ""
 
+        // 1. Obtenemos textos
+        val nombre = editTextNombreSenal.text.toString().trim()
+        val calle = editTextCallePrincipal.text.toString().trim()
+
+        // 2. NORMALIZAMOS LA CALLE (Minúsculas, sin tildes)
+        val calleLimpia = calle.normalizarParaBusqueda()
+
+        // 3. Creamos el mapa de datos (incluyendo el campo nuevo)
         val catastroData = mutableMapOf(
-            "nombreSenal" to editTextNombreSenal.text.toString().trim(),
+            "nombreSenal" to nombre,
             "leyenda" to editTextLeyenda.text.toString().trim(),
-            "callePrincipal" to editTextCallePrincipal.text.toString().trim(),
+            "callePrincipal" to calle,
+            "calleNormalizada" to calleLimpia, // <--- AQUÍ ESTÁ EL CAMBIO CLAVE
             "interseccion" to editTextInterseccion.text.toString().trim(),
             "numeracion" to editTextNumeracion.text.toString().trim(),
             "cantidadPostes" to editTextCantidadPostes.text.toString().trim(),
@@ -323,12 +304,11 @@ class CrearActivity : AppCompatActivity() {
             "userName" to (currentUserName ?: ""),
             "timestamp" to com.google.firebase.firestore.FieldValue.serverTimestamp()
         )
-        // ... (Fin de obtención de datos) ...
 
-        // --- LÓGICA DE GUARDADO ---
+        // --- LÓGICA DE GUARDADO (MANTENIDA IGUAL) ---
 
         if (editCatastroId != null && !editCatastroId!!.startsWith("TEMP_")) {
-            // MODO EDICIÓN NORMAL (Online u Offline funciona igual con merge)
+            // MODO EDICIÓN NORMAL
             db.collection("catastros").document(editCatastroId!!)
                 .set(catastroData, com.google.firebase.firestore.SetOptions.merge())
                 .addOnSuccessListener {
@@ -336,20 +316,20 @@ class CrearActivity : AppCompatActivity() {
                     finish()
                 }
                 .addOnFailureListener {
-                    buttonGuardar.isEnabled = true // Reactivar si falla
+                    buttonGuardar.isEnabled = true
                     buttonGuardar.text = "Guardar Catastro"
                     Toast.makeText(this, "Error: ${it.message}", Toast.LENGTH_SHORT).show()
                 }
         } else {
-            // MODO CREACIÓN (O edición de un temporal)
+            // MODO CREACIÓN (O edición de temporal)
             if (isNetworkAvailable(this)) {
-                // --- CON INTERNET: Usamos Transacción y Contador ---
+                // --- CON INTERNET: Transacción y Contador ---
                 val docRefContador = db.collection("counters").document("catastro_counter")
                 val oldTempId = if (editCatastroId?.startsWith("TEMP_") == true) editCatastroId else null
 
                 db.runTransaction { transaction ->
                     val snapshot = transaction.get(docRefContador)
-                    val currentCount = snapshot.getLong("count") ?: 0 // Ojo: Asegúrate que tu contador en Firebase no sea null
+                    val currentCount = snapshot.getLong("count") ?: 0
                     val nextCount = currentCount + 1
                     val nuevoId = "CAT_$nextCount"
 
@@ -371,19 +351,17 @@ class CrearActivity : AppCompatActivity() {
                 }
 
             } else {
-                // --- SIN INTERNET: Mensaje especial y guardado local ---
+                // --- SIN INTERNET: Guardado local ---
                 val tempId = if (editCatastroId?.startsWith("TEMP_") == true) editCatastroId!! else "TEMP_${System.currentTimeMillis()}"
                 catastroData["isTemp"] = true
 
                 db.collection("catastros").document(tempId)
                     .set(catastroData)
                     .addOnSuccessListener {
-                        // AQUÍ ESTÁ EL MENSAJE QUE PEDISTE
                         Toast.makeText(this, "Sin conexión. Se subirá automáticamente cuando tengas internet.", Toast.LENGTH_LONG).show()
                         finish()
                     }
                     .addOnFailureListener {
-                        // Incluso si falla (raro en local), reactivamos botón
                         buttonGuardar.isEnabled = true
                         buttonGuardar.text = "Guardar Catastro"
                     }
